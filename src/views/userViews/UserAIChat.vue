@@ -1,8 +1,7 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
-import { ChatDotRound, Upload, Delete, Clock, Folder, Picture, Microphone, Close, Document } from '@element-plus/icons-vue'
+import { ChatDotRound, Delete, Clock, Folder } from '@element-plus/icons-vue'
 import AIBottomInput from '@/components/AIBottomInput.vue'
-import { chat } from '@/api/ai'
 
 const isTyping = ref(false)
 const showHistory = ref(false)
@@ -95,9 +94,9 @@ async function handleBottomInputSend(payload) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        sessionId: currentSessionId.value,
-        userMessage: text.trim(),
-        images: files.filter(f => f.type === 'image').map(f => f.url)
+        session_id: currentSessionId.value,
+        message: text.trim(),
+        url: files.filter(f => f.type === 'image').map(f => f.url)[0] || null
       })
     })
 
@@ -108,6 +107,7 @@ async function handleBottomInputSend(payload) {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let aiContent = ''
+    let jsonBuffer = ''
 
     const aiMessage = {
       id: Date.now() + 1,
@@ -121,10 +121,41 @@ async function handleBottomInputSend(payload) {
       const { done, value } = await reader.read()
       if (done) break
       const chunk = decoder.decode(value, { stream: true })
-      aiContent += chunk
-      aiMessage.content = aiContent
-      await nextTick()
-      scrollToBottom()
+      jsonBuffer += chunk
+
+      // 按 \n\n（SSE 事件边界）分割，不消耗事件内 \n
+      while (true) {
+        const boundaryIdx = jsonBuffer.indexOf('\n\n')
+        if (boundaryIdx === -1) break
+        const event = jsonBuffer.slice(0, boundaryIdx)
+        jsonBuffer = jsonBuffer.slice(boundaryIdx + 2)
+
+        // 解析事件内的 data: 行
+        const lines = event.split('\n')
+        const dataLines = lines
+          .filter(l => l.startsWith('data:'))
+          .map(l => l.slice(5))
+        if (dataLines.length > 0) {
+          aiContent += dataLines.join('\n')
+        }
+
+        const msgIndex = messages.value.length - 1
+        if (msgIndex >= 0) {
+          messages.value[msgIndex].content = aiContent.replace(/\n/g, '<br>')
+        }
+        nextTick(() => scrollToBottom())
+      }
+    }
+
+    // 流结束，处理残余 buffer
+    if (jsonBuffer) {
+      const lines = jsonBuffer.split('\n')
+      const dataLines = lines
+        .filter(l => l.startsWith('data:'))
+        .map(l => l.slice(5))
+      if (dataLines.length > 0) {
+        aiContent += dataLines.join('\n')
+      }
     }
   } catch (error) {
     console.error('AI chat error:', error)
@@ -602,302 +633,6 @@ onMounted(() => {
   }
 }
 
-/* Input Area */
-.chat-input-area {
-  padding: 16px 20px 24px;
-  background: var(--plaza-bg);
-  flex-shrink: 0;
-}
-
-/* Action buttons row - left aligned */
-.input-actions-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.input-actions-left {
-  display: flex;
-  gap: 8px;
-}
-
-.input-actions-right {
-  display: flex;
-  gap: 8px;
-}
-
-/* Icon + Text buttons */
-.action-btn-text {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--plaza-text);
-  font-weight: 600;
-  font-size: 14px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.action-btn-text:hover {
-  background: var(--plaza-accent-soft);
-  color: var(--plaza-accent);
-}
-
-.action-btn-text .el-icon {
-  font-size: 18px;
-}
-
-/* Icon only buttons */
-.icon-only-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  color: var(--plaza-text-muted);
-  transition: all 0.2s ease;
-}
-
-.icon-only-btn:hover {
-  color: var(--plaza-accent);
-  background: var(--plaza-accent-soft);
-}
-
-.icon-only-btn .el-icon {
-  font-size: 18px;
-}
-
-.icon-only-btn.voice-active {
-  color: #f56c6c;
-  background: rgba(245, 108, 108, 0.1);
-}
-
-.icon-only-btn.voice-active:hover {
-  color: #f56c6c;
-  background: rgba(245, 108, 108, 0.15);
-}
-
-.icon-only-btn.el-button--primary {
-  background: var(--plaza-accent) !important;
-  border-color: var(--plaza-accent) !important;
-  color: #fff !important;
-}
-
-.icon-only-btn.el-button--primary:hover:not(:disabled) {
-  background: var(--plaza-accent-hover) !important;
-  border-color: var(--plaza-accent-hover) !important;
-}
-
-/* Input card */
-.input-card {
-  background: #fff;
-  border: 1px solid var(--plaza-border);
-  border-radius: 16px;
-  padding: 12px 16px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.main-input :deep(.el-textarea__inner) {
-  border: none;
-  padding: 0;
-  font-size: 15px;
-  line-height: 1.5;
-  resize: none;
-  background: transparent;
-}
-
-.main-input :deep(.el-textarea__inner:focus) {
-  border: none;
-  box-shadow: none;
-}
-
-/* Uploaded Images */
-.uploaded-images-preview {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.uploaded-image-item {
-  position: relative;
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid var(--plaza-border);
-}
-
-.uploaded-image-item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.uploaded-image-item .remove-btn {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 20px;
-  height: 20px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 50%;
-  color: #fff;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.uploaded-image-item:hover .remove-btn {
-  opacity: 1;
-}
-
-/* Uploaded Documents */
-.uploaded-documents-preview {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.uploaded-document-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f5f5f5;
-  border-radius: 8px;
-  border: 1px solid var(--plaza-border);
-}
-
-.uploaded-document-item .doc-icon {
-  font-size: 20px;
-  color: var(--plaza-accent);
-}
-
-.uploaded-document-item .doc-name {
-  font-size: 13px;
-  color: var(--plaza-text);
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.uploaded-document-item .remove-btn {
-  width: 20px;
-  height: 20px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 50%;
-  color: #fff;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.uploaded-document-item:hover .remove-btn {
-  opacity: 1;
-}
-
-/* Recording Indicator */
-.recording-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-  color: #f56c6c;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.recording-dot {
-  width: 8px;
-  height: 8px;
-  background: #f56c6c;
-  border-radius: 50%;
-  animation: pulse-recording 1s infinite;
-}
-
-@keyframes pulse-recording {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.8); }
-}
-
-/* Input Hint */
-.input-hint {
-  font-size: 12px;
-  color: var(--plaza-text-muted);
-  margin-top: 8px;
-  text-align: center;
-}
-
-/* Uploaded Images Preview */
-.uploaded-images-preview {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-  padding: 0 4px;
-}
-
-.uploaded-image-item {
-  position: relative;
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid var(--plaza-border);
-}
-
-.uploaded-image-item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.uploaded-image-item .remove-btn {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 20px;
-  height: 20px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 50%;
-  color: #fff;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.uploaded-image-item:hover .remove-btn {
-  opacity: 1;
-}
-
 /* Message Images */
 .message-images {
   display: flex;
@@ -916,40 +651,5 @@ onMounted(() => {
   width: 100%;
   height: auto;
   display: block;
-}
-
-/* Input Action Buttons */
-.input-action-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  color: var(--plaza-text-muted);
-  flex-shrink: 0;
-}
-
-.input-action-btn:hover {
-  color: var(--plaza-accent);
-  background: var(--plaza-accent-soft);
-}
-
-.voice-btn.voice-active {
-  color: #fff;
-  background: #f56c6c;
-}
-
-.voice-btn.voice-active:hover {
-  background: #f78989;
-}
-
-/* Recording Hint */
-.recording-hint {
-  color: #f56c6c;
-  font-weight: 500;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
 }
 </style>

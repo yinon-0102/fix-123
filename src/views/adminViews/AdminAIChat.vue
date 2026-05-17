@@ -1,6 +1,6 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
-import { ChatDotRound, Upload, Delete, Clock, Folder, Picture, Microphone, Close, Document } from '@element-plus/icons-vue'
+import { ChatDotRound, Delete, Clock, Folder } from '@element-plus/icons-vue'
 import AIBottomInput from '@/components/AIBottomInput.vue'
 
 const isTyping = ref(false)
@@ -14,7 +14,6 @@ const sessions = ref([])
 
 // 当前消息列表
 const messages = ref([])
-
 
 // 从 localStorage 加载历史会话
 function loadSessions() {
@@ -69,7 +68,7 @@ function saveCurrentSession() {
 }
 
 // 处理 AIBottomInput 发送的消息
-function handleBottomInputSend(payload) {
+async function handleBottomInputSend(payload) {
   const { text, files } = payload
   if (!text.trim() && files.length === 0) return
 
@@ -84,27 +83,95 @@ function handleBottomInputSend(payload) {
   isTyping.value = true
   saveCurrentSession()
   // 用户消息发出后立即滚动到底部
-  nextTick(() => scrollToBottom())
+  await nextTick()
+  scrollToBottom()
 
-  // 模拟AI回复
-  setTimeout(async () => {
-    isTyping.value = false
-    const responses = [
-      '根据您的描述，我为您找到了以下相关信息：\n\n1. 知识库文档《电力设备检修规程》第三章相关内容\n2. 历史案例中相似问题的解决方案\n3. 最新的作业指导书该操作流程',
-      '这是一个常见的问题，我来为您详细解答...\n\n建议您按照以下步骤操作：\n1. 检查设备电源状态\n2. 确认连接线路\n3. 如仍有问题请联系技术支持',
-      '我已经分析了您提供的信息，以下是建议方案：\n\n• 优先检查安全防护措施\n• 参考知识库相关章节\n• 如需帮助可查看作业指引',
-    ]
-    const aiResponse = {
+  // 调用后端AI对话接口
+  try {
+    const response = await fetch('/api/weixiu/ai/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        session_id: currentSessionId.value,
+        message: text.trim(),
+        url: files.filter(f => f.type === 'image').map(f => f.url)[0] || null
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let aiContent = ''
+    let jsonBuffer = ''
+
+    const aiMessage = {
       id: Date.now() + 1,
       role: 'assistant',
-      content: responses[Math.floor(Math.random() * responses.length)],
+      content: '',
       timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
     }
-    messages.value.push(aiResponse)
-    saveCurrentSession()
-    await nextTick()
-    scrollToBottom()
-  }, 1200)
+    messages.value.push(aiMessage)
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = decoder.decode(value, { stream: true })
+      jsonBuffer += chunk
+
+      // 按 \n\n（SSE 事件边界）分割，不消耗事件内 \n
+      while (true) {
+        const boundaryIdx = jsonBuffer.indexOf('\n\n')
+        if (boundaryIdx === -1) break
+        const event = jsonBuffer.slice(0, boundaryIdx)
+        jsonBuffer = jsonBuffer.slice(boundaryIdx + 2)
+
+        // 解析事件内的 data: 行
+        const lines = event.split('\n')
+        const dataLines = lines
+          .filter(l => l.startsWith('data:'))
+          .map(l => l.slice(5))
+        if (dataLines.length > 0) {
+          aiContent += dataLines.join('\n')
+        }
+
+        const msgIndex = messages.value.length - 1
+        if (msgIndex >= 0) {
+          messages.value[msgIndex].content = aiContent.replace(/\n/g, '<br>')
+        }
+        nextTick(() => scrollToBottom())
+      }
+    }
+
+    // 流结束，处理残余 buffer
+    if (jsonBuffer) {
+      const lines = jsonBuffer.split('\n')
+      const dataLines = lines
+        .filter(l => l.startsWith('data:'))
+        .map(l => l.slice(5))
+      if (dataLines.length > 0) {
+        aiContent += dataLines.join('\n')
+      }
+    }
+  } catch (error) {
+    console.error('AI chat error:', error)
+    const aiMessage = {
+      id: Date.now() + 1,
+      role: 'assistant',
+      content: '抱歉，发生了错误，请稍后再试。',
+      timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    }
+    messages.value.push(aiMessage)
+  }
+
+  isTyping.value = false
+  saveCurrentSession()
+  await nextTick()
+  scrollToBottom()
 }
 
 // 创建新会话
@@ -282,9 +349,11 @@ onMounted(() => {
 .ai-chat-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 60px);
+  width: 100%;
+  height: 100%;
   background: var(--plaza-bg);
   position: relative;
+  overflow: hidden;
 }
 
 /* History Sidebar */
@@ -301,6 +370,8 @@ onMounted(() => {
   transition: transform 0.3s ease;
   display: flex;
   flex-direction: column;
+  padding: 0 16px;
+  box-sizing: border-box;
 }
 
 .history-sidebar.show {
@@ -394,14 +465,14 @@ onMounted(() => {
 
 /* Header */
 .chat-header {
-  height: 80px;
-  padding: 0;
+  padding: 0 24px 16px;
   background: var(--plaza-bg-card);
   border-bottom: 1px solid var(--plaza-border);
   flex-shrink: 0;
   box-sizing: border-box;
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
+  width: 100%;
 }
 
 .header-content {
@@ -409,9 +480,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  height: 100%;
+  padding: 0;
   box-sizing: border-box;
+  min-height: 40px;
 }
 
 .header-left {
@@ -443,8 +514,7 @@ onMounted(() => {
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
-  padding-bottom: 7rem; /* 留出底部输入框高度，防止最后一条消息被遮挡 */
+  padding: 16px 24px 32px;
   display: flex;
   flex-direction: column;
   gap: 20px;

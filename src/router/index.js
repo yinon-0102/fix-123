@@ -37,11 +37,6 @@ const routes = [
     component: () => import('../views/homeviews/ForgotPassword.vue')
   },
   {
-    path: '/home',
-    name: 'Dashboard',
-    component: () => import('../views/homeviews/Home.vue')
-  },
-  {
     path: '/admin',
     name: 'Admin',
     component: () => import('../views/adminViews/AdminLayout.vue'),
@@ -68,9 +63,24 @@ const routes = [
         component: () => import('../views/adminViews/AdminAIChat.vue')
       },
       {
+        path: 'business',
+        name: 'AdminBusiness',
+        component: () => import('../views/adminViews/BusinessManage.vue')
+      },
+      {
         path: 'settings',
         name: 'AdminSettings',
         component: () => import('../views/adminViews/AdminSettings.vue')
+      },
+      {
+        path: 'profile',
+        name: 'AdminProfile',
+        component: () => import('../views/adminViews/AdminProfile.vue')
+      },
+      {
+        path: 'notify',
+        name: 'AdminNotify',
+        component: () => import('../views/adminViews/AdminNotify.vue')
       }
     ]
   },
@@ -96,19 +106,14 @@ const routes = [
         component: () => import('../views/userViews/UserGuide.vue')
       },
       {
-        path: 'cases',
-        name: 'UserCases',
-        component: () => import('../views/userViews/UserCases.vue')
-      },
-      {
         path: 'ai-chat',
         name: 'UserAIChat',
         component: () => import('../views/userViews/UserAIChat.vue')
       },
       {
-        path: 'correction',
-        name: 'UserCorrection',
-        component: () => import('../views/userViews/UserCorrection.vue')
+        path: 'search-result',
+        name: 'UserSearchResult',
+        component: () => import('../views/userViews/UserSearchResult.vue')
       }
     ]
   }

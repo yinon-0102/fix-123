@@ -61,6 +61,7 @@
       <!-- Input row -->
       <div class="input-row">
         <input
+          ref="textInput"
           v-model="inputValue"
           type="text"
           class="text-input"
@@ -69,11 +70,11 @@
         />
         <button
           class="icon-btn voice-btn"
-          :class="{ 'recording': recordStatus === 'recording', 'stopped': recordStatus === 'stopped' }"
+          :class="{ 'recording': isRecording }"
+          :disabled="isFlushingPending && !isRecording"
           @click="toggleRecording"
-          :disabled="recordStatus === 'processing'"
         >
-          <svg v-if="recordStatus !== 'recording'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg v-if="!isRecording" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
             <line x1="12" x2="12" y1="19" y2="22"/>
@@ -108,96 +109,32 @@
           <button class="remove-btn" @click="removeFile(file.id)">×</button>
         </div>
       </div>
-
-      <!-- Recording status bar -->
-      <div v-if="recordStatus !== 'idle'" class="record-status-bar">
-        <div class="record-status-info">
-          <span class="status-badge" :class="recordStatus">{{ statusText }}</span>
-          <span v-if="recordStatus === 'recording' || recordStatus === 'stopped'" class="record-timer">{{ formatTime(recordDuration) }}</span>
-        </div>
-
-        <!-- Audio preview -->
-        <div v-if="audioUrl && recordStatus !== 'processing'" class="audio-preview">
-          <audio :src="audioUrl" controls></audio>
-        </div>
-
-        <!-- Processing spinner -->
-        <div v-if="recordStatus === 'processing'" class="processing-indicator">
-          <span class="spinner"></span>
-          正在识别...
-        </div>
-
-        <!-- ASR Result -->
-        <div v-if="asrResult && recordStatus === 'done'" class="asr-result">
-          <div class="result-header">
-            <span class="result-title">识别结果</span>
-            <el-button size="small" @click="copyResult" :icon="CopyDocument">复制</el-button>
-          </div>
-          <div class="result-meta">
-            <span>语言: {{ asrResult.language }}</span>
-            <span>置信度: {{ (asrResult.language_probability * 100).toFixed(1) }}%</span>
-            <span>时长: {{ asrResult.duration.toFixed(1) }}s</span>
-          </div>
-          <div class="result-text">{{ asrResult.text }}</div>
-          <div v-if="asrResult.segments && asrResult.segments.length > 0" class="result-segments">
-            <div v-for="(seg, idx) in asrResult.segments" :key="idx" class="segment-item">
-              <span class="segment-time">[{{ formatTime(seg.start) }} - {{ formatTime(seg.end) }}]</span>
-              <span class="segment-text">{{ seg.text }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Error -->
-        <div v-if="recordStatus === 'error'" class="record-error">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" x2="12" y1="8" y2="12"/>
-            <line x1="12" x2="12.01" y1="16" y2="16"/>
-          </svg>
-          {{ recordError }}
-        </div>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, defineEmits, onUnmounted } from 'vue'
-import { CopyDocument } from '@element-plus/icons-vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { uploadAudio } from '@/api/asr'
-import { ElMessage } from 'element-plus'
+import { uploadImage } from '@/api/user'
 
 const emit = defineEmits(['send'])
 
 const inputValue = ref('')
 const isThinking = ref(false)
 const uploadedFiles = ref([])
+const textInput = ref(null)
 
 // Recording state
-const recordStatus = ref('idle') // idle | recording | stopped | processing | done | error
-const recordDuration = ref(0)
-const audioUrl = ref('')
-const audioFile = ref(null)
-const asrResult = ref(null)
-const recordError = ref('')
-
+const isRecording = ref(false)
+const isFlushingPending = ref(false) // 正在流式输出 pendingText，按钮禁用
 let mediaRecorder = null
 let audioStream = null
-let audioChunks = []
-let timerInterval = null
-let recordStartTime = null
-
-const statusText = computed(() => {
-  const map = {
-    idle: '',
-    recording: '录音中',
-    stopped: '已停止',
-    processing: '识别中',
-    done: '识别完成',
-    error: '识别失败'
-  }
-  return map[recordStatus.value] || ''
-})
+let currentChunks = []
+let sendInterval = null
+let typeInterval = null // 打字机效果定时器
+let pendingText = '' // 上一轮识别结果，等待流式输出
+let isFirstChunk = true // 第一个3秒标记
 
 const canSend = computed(() => inputValue.value.trim().length > 0 || uploadedFiles.value.length > 0)
 
@@ -206,58 +143,138 @@ const toggleThinking = () => {
 }
 
 const toggleRecording = () => {
-  if (recordStatus.value === 'idle') {
+  if (!canToggleRecording.value) return
+  if (!isRecording.value) {
     startRecording()
-  } else if (recordStatus.value === 'recording') {
+  } else {
     stopRecording()
   }
+}
+
+const canToggleRecording = computed(() => {
+  // 录音中 或 流式输出中 都可切换（流式输出时按停止会触发 flush）
+  return !isFlushingPending.value || isRecording.value
+})
+
+// 流式打字效果：将 pendingText 逐字输出到 inputValue
+const flushPending = () => {
+  if (!pendingText) return
+  isFlushingPending.value = true
+  isRecording.value = false // 按钮状态切换
+
+  let index = 0
+  typeInterval = setInterval(() => {
+    if (index < pendingText.length) {
+      inputValue.value += pendingText[index]
+      index++
+    } else {
+      clearInterval(typeInterval)
+      typeInterval = null
+      pendingText = ''
+      isFlushingPending.value = false
+      // 恢复录音按钮可点击
+    }
+  }, 50)
+}
+
+const startNewMediaRecorder = () => {
+  const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus'
+    : 'audio/webm'
+  mediaRecorder = new MediaRecorder(audioStream, { mimeType })
+  currentChunks = []
+
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data && event.data.size > 0) {
+      currentChunks.push(event.data)
+    }
+  }
+
+  mediaRecorder.onstop = () => {
+    // stop() 触发最终 dataavailable（包含完整 WebM 头部），随后触发 onstop
+    // 此时 currentChunks 已包含当前段的完整数据
+
+    if (currentChunks.length > 0) {
+      const chunksToSend = currentChunks
+      currentChunks = []
+      const blob = new Blob(chunksToSend, { type: 'audio/webm' })
+      const file = new File([blob], `chunk_${Date.now()}.webm`, { type: 'audio/webm' })
+
+      uploadAudio(file, file.name).then(result => {
+        if (result.text) {
+          if (isFirstChunk) {
+            // 第一个3s：不输出，存入pending，等下一个3s再输出
+            pendingText = result.text
+            isFirstChunk = false
+            // 如果还在录音，重启 MediaRecorder 继续录下一个3s
+            if (isRecording.value && audioStream) {
+              startNewMediaRecorder()
+            }
+          } else {
+            // 非第一个3s：先把上一轮pending流式输出，把本轮结果存入pending
+            const prevText = pendingText
+            pendingText = result.text
+
+            // 流式打字效果
+            isFlushingPending.value = true
+            let index = 0
+            typeInterval = setInterval(() => {
+              if (index < prevText.length) {
+                inputValue.value += prevText[index]
+                index++
+              } else {
+                clearInterval(typeInterval)
+                typeInterval = null
+                isFlushingPending.value = false
+                // flush完成后，如果还在录音，重启 MediaRecorder 继续录下一个3s
+                if (isRecording.value && audioStream) {
+                  startNewMediaRecorder()
+                }
+              }
+            }, 50)
+          }
+        }
+      }).catch(e => {
+        console.error('ASR chunk failed:', e)
+        if (isFirstChunk) {
+          isFirstChunk = false
+        }
+      })
+    } else {
+      // 没有音频数据（停止录音时最后一个chunk可能为空）
+      if (isRecording.value && audioStream) {
+        startNewMediaRecorder()
+      }
+    }
+  }
+
+  mediaRecorder.start()
 }
 
 const startRecording = async () => {
   try {
     audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-
-    // Determine supported MIME type
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-      ? 'audio/webm;codecs=opus'
-      : 'audio/webm'
-
-    mediaRecorder = new MediaRecorder(audioStream, { mimeType })
-
-    audioChunks = []
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data && event.data.size > 0) {
-        audioChunks.push(event.data)
+    startNewMediaRecorder()
+    isRecording.value = true
+    textInput.value?.focus()
+    sendInterval = setInterval(() => {
+      // 每 3 秒停止当前 MediaRecorder，触发 onstop 发送完整 WebM 分段
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop()
       }
-    }
-
-    mediaRecorder.onstop = async () => {
-      const blob = new Blob(audioChunks, { type: mimeType })
-      const timestamp = Date.now()
-      audioFile.value = new File([blob], `recording_${timestamp}.webm`, { type: mimeType })
-      audioUrl.value = URL.createObjectURL(blob)
-
-      recordStatus.value = 'stopped'
-      clearInterval(timerInterval)
-  }
-
-    mediaRecorder.start(100) // collect data every 100ms
-    recordStatus.value = 'recording'
-    recordStartTime = Date.now()
-    recordDuration.value = 0
-
-    timerInterval = setInterval(() => {
-      recordDuration.value = Math.floor((Date.now() - recordStartTime) / 1000)
-    }, 1000)
-
+    }, 3000)
   } catch (err) {
     console.error('Failed to start recording:', err)
-    recordError.value = err.message || '无法访问麦克风'
-    recordStatus.value = 'error'
   }
 }
 
 const stopRecording = () => {
+  if (sendInterval) {
+    clearInterval(sendInterval)
+    sendInterval = null
+  }
+  // 先标记停止，onstop 中不会再重启 MediaRecorder
+  isRecording.value = false
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop()
   }
@@ -265,54 +282,11 @@ const stopRecording = () => {
     audioStream.getTracks().forEach(track => track.stop())
     audioStream = null
   }
-  if (timerInterval) {
-    clearInterval(timerInterval)
-    timerInterval = null
+  // 如果有剩余pendingText，停止后立即流式输出
+  if (pendingText && !isFlushingPending.value) {
+    flushPending()
   }
 }
-
-const processRecording = async () => {
-  if (!audioFile.value) return
-
-  recordStatus.value = 'processing'
-
-  try {
-    const result = await uploadAudio(audioFile.value, audioFile.value.name)
-    asrResult.value = result
-    inputValue.value = result.text
-    recordStatus.value = 'done'
-  } catch (err) {
-    console.error('ASR error:', err)
-    recordError.value = err.message || '识别失败'
-    recordStatus.value = 'error'
-  }
-}
-
-const copyResult = () => {
-  if (!asrResult.value) return
-  const text = asrResult.value.segments
-    ? asrResult.value.segments.map(s => s.text).join('')
-    : asrResult.value.text
-  navigator.clipboard.writeText(text).then(() => {
-    ElMessage.success('已复制到剪贴板')
-  }).catch(() => {
-    ElMessage.error('复制失败')
-  })
-}
-
-const formatTime = (seconds) => {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-}
-
-// Watch for stopped status to auto process
-import { watch } from 'vue'
-watch(recordStatus, (newVal) => {
-  if (newVal === 'stopped') {
-    processRecording()
-  }
-})
 
 const handleSend = () => {
   if (canSend.value) {
@@ -322,40 +296,43 @@ const handleSend = () => {
     })
     inputValue.value = ''
     uploadedFiles.value = []
-    // Reset recording state after sending
-    resetRecordingState()
   }
 }
 
-const resetRecordingState = () => {
-  recordStatus.value = 'idle'
-  recordDuration.value = 0
-  asrResult.value = null
-  recordError.value = ''
-  if (audioUrl.value) {
-    URL.revokeObjectURL(audioUrl.value)
-    audioUrl.value = ''
-  }
-  audioFile.value = null
-}
-
-const handleImageUpload = (event) => {
+const handleImageUpload = async (event) => {
   const files = event.target.files
   if (!files.length) return
-
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     if (file.type.startsWith('image/')) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        uploadedFiles.value.push({
-          id: Date.now() + i,
-          name: file.name,
-          type: 'image',
-          url: e.target.result
-        })
+      // 先显示本地预览（占位）
+      const localId = Date.now() + i
+      const localUrl = URL.createObjectURL(file)
+      const item = {
+        id: localId,
+        name: file.name,
+        type: 'image',
+        url: localUrl,
+        status: 'uploading'
       }
-      reader.readAsDataURL(file)
+      uploadedFiles.value.push(item)
+
+      // 上传到 MinIO
+      try {
+        const res = await uploadImage(file)
+        // 假设 res.data 或 res.url 是返回的 MinIO URL
+        const minioUrl = res.data || res.url || res
+        // 找到本地项并更新为真实 URL
+        const target = uploadedFiles.value.find(f => f.id === localId)
+        if (target) {
+          target.url = minioUrl
+          target.status = 'success'
+        }
+      } catch (e) {
+        console.error('图片上传失败:', e)
+        const target = uploadedFiles.value.find(f => f.id === localId)
+        if (target) target.status = 'error'
+      }
     }
   }
   event.target.value = ''
@@ -364,7 +341,6 @@ const handleImageUpload = (event) => {
 const handleDocUpload = (event) => {
   const files = event.target.files
   if (!files.length) return
-
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     const reader = new FileReader()
@@ -389,11 +365,8 @@ onUnmounted(() => {
   if (audioStream) {
     audioStream.getTracks().forEach(track => track.stop())
   }
-  if (audioUrl.value) {
-    URL.revokeObjectURL(audioUrl.value)
-  }
-  if (timerInterval) {
-    clearInterval(timerInterval)
+  if (sendInterval) {
+    clearInterval(sendInterval)
   }
 })
 </script>
@@ -521,11 +494,6 @@ onUnmounted(() => {
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
 }
 
-.voice-btn.stopped {
-  background: #ecfdf5;
-  color: #10b981;
-}
-
 .send-btn {
   background: #e5e7eb;
   color: #9ca3af;
@@ -611,158 +579,5 @@ onUnmounted(() => {
 
 .upload-item:hover .remove-btn {
   opacity: 1;
-}
-
-/* Recording status bar */
-.record-status-bar {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #f3f4f6;
-}
-
-.record-status-info {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.status-badge.recording {
-  background: #fef2f2;
-  color: #ef4444;
-}
-
-.status-badge.stopped {
-  background: #ecfdf5;
-  color: #10b981;
-}
-
-.status-badge.processing {
-  background: #eff6ff;
-  color: #3b82f6;
-}
-
-.status-badge.done {
-  background: #f0fdf4;
-  color: #22c55e;
-}
-
-.status-badge.error {
-  background: #fef2f2;
-  color: #ef4444;
-}
-
-.record-timer {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #6b7280;
-  font-variant-numeric: tabular-nums;
-}
-
-.audio-preview {
-  margin-bottom: 0.75rem;
-}
-
-.audio-preview audio {
-  width: 100%;
-  height: 2rem;
-  border-radius: 0.5rem;
-}
-
-.processing-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #3b82f6;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-.spinner {
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid #3b82f6;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.asr-result {
-  background: #f9fafb;
-  border-radius: 0.75rem;
-  padding: 1rem;
-}
-
-.result-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.result-title {
-  font-weight: 600;
-  color: #1f2937;
-  font-size: 0.875rem;
-}
-
-.result-meta {
-  display: flex;
-  gap: 1rem;
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin-bottom: 0.75rem;
-}
-
-.result-text {
-  font-size: 0.9375rem;
-  color: #1f2937;
-  line-height: 1.6;
-  margin-bottom: 0.75rem;
-}
-
-.result-segments {
-  border-top: 1px solid #e5e7eb;
-  padding-top: 0.75rem;
-}
-
-.segment-item {
-  display: flex;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  color: #4b5563;
-  margin-bottom: 0.375rem;
-}
-
-.segment-time {
-  color: #9ca3af;
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-}
-
-.segment-text {
-  color: #374151;
-}
-
-.record-error {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #ef4444;
-  font-size: 0.875rem;
-  font-weight: 500;
 }
 </style>

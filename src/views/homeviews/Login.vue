@@ -30,6 +30,7 @@ const handleSubmit = async () => {
 
     try {
       const res = await login(formData.username, formData.password)
+      console.log('登录响应:', res)
       if (res.code === '200') {
         loginSuccess.value = true
         // 保存用户信息（后端直接返回UserVO，没有嵌套user对象和token）
@@ -44,9 +45,10 @@ const handleSubmit = async () => {
           }
         }, 800)
       } else {
-        throw new Error(res.msg || '登录失败')
+        throw new Error(res.message || res.msg || '登录失败')
       }
     } catch (error) {
+      console.error('登录失败:', error)
       loading.value = false
       errorMessage.value = error.message || '用户名或密码错误'
     }
@@ -115,7 +117,6 @@ const goToForgotPassword = () => {
             :model="formData"
             :rules="rules"
             class="login-form"
-            @submit.prevent="handleSubmit"
           >
             <el-form-item prop="username">
               <label class="input-label">用户名</label>

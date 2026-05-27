@@ -1,13 +1,27 @@
 <script setup>
-import { ref } from 'vue'
-import { Search, ArrowRight, Check, Document, Warning } from '@element-plus/icons-vue'
+import { ref, computed } from 'vue'
+import { Search, ArrowRight, Document } from '@element-plus/icons-vue'
+import HomeBanner from '@/components/HomeBanner.vue'
 
-const stats = [
-  { label: '检索次数', value: '56', icon: Search, color: '#F97316' },
-  { label: '我的案例', value: '12', icon: Document, color: '#22c55e' },
-  { label: '待审核', value: '3', icon: Warning, color: '#F59E0B' },
-  { label: '已校正', value: '28', icon: Check, color: '#3B82F6' },
+const userName = computed(() => {
+  try {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+    return userInfo.name || '用户'
+  } catch {
+    return '用户'
+  }
+})
+
+const bannerItems = [
+  { src: 'https://picsum.photos/800/600?random=1', title: '官网动态', href: '' },
+  { src: 'https://picsum.photos/800/600?random=2', title: 'featured', href: '' },
+  { src: 'https://picsum.photos/800/600?random=3', title: 'banner3', href: '' },
+  { src: 'https://picsum.photos/800/600?random=4', title: 'banner4', href: '' },
+  { src: 'https://picsum.photos/800/600?random=5', title: 'banner5', href: '' },
+  { src: 'https://picsum.photos/800/600?random=6', title: '电子海报', href: '' },
 ]
+
+const stats = []
 
 const recentSearches = [
   { keyword: '发动机维护', time: '10分钟前', results: 15 },
@@ -18,8 +32,6 @@ const recentSearches = [
 const quickActions = [
   { title: '智能检索', desc: '搜索设备型号、故障描述', path: '/user/search', icon: Search },
   { title: '作业指引', desc: '查看标准操作流程', path: '/user/guide', icon: Document },
-  { title: '我的案例', desc: '查看已提交的检修案例', path: '/user/cases', icon: Warning },
-  { title: '结果校正', desc: '校正系统输出结果', path: '/user/correction', icon: Check },
 ]
 </script>
 
@@ -27,22 +39,12 @@ const quickActions = [
   <div class="user-dashboard">
     <!-- Welcome -->
     <div class="welcome-section">
-      <h1 class="welcome-title">欢迎回来，<span class="highlight">用户</span></h1>
-      <p class="welcome-desc">您可以在这里进行设备检修知识检索、提交案例、校正结果等操作</p>
+      <h1 class="welcome-title">欢迎回来，<span class="highlight">{{ userName }}</span></h1>
+      <p class="welcome-desc">您可以在这里进行设备检修知识检索和查看作业指引</p>
     </div>
 
-    <!-- Stats -->
-    <div class="stats-grid">
-      <div v-for="stat in stats" :key="stat.label" class="stat-card">
-        <div class="stat-icon" :style="{ background: stat.color + '15', color: stat.color }">
-          <el-icon><component :is="stat.icon" /></el-icon>
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stat.value }}</div>
-          <div class="stat-label">{{ stat.label }}</div>
-        </div>
-      </div>
-    </div>
+    <!-- Banner Carousel -->
+    <HomeBanner :items="bannerItems" :autoplay="true" :interval="4000" />
 
     <!-- Content Grid -->
     <div class="content-grid">
@@ -78,7 +80,7 @@ const quickActions = [
             :to="action.path"
             class="action-item"
           >
-            <div class="action-icon" :style="{ color: stats.find(s => s.icon === action.icon)?.color || '#F97316' }">
+            <div class="action-icon" :style="{ color: action.icon === Search ? '#334155' : '#22c55e' }">
               <el-icon><component :is="action.icon" /></el-icon>
             </div>
             <span class="action-title">{{ action.title }}</span>

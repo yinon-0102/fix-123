@@ -14,21 +14,6 @@ export function login(username, password) {
 }
 
 /**
- * 用户注册
- * @param {File} file - Excel文件
- */
-export function register(file) {
-  const formData = new FormData()
-  formData.append('file', file)
-  return request({
-    url: '/weixiu/user/register',
-    method: 'POST',
-    data: formData,
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
-}
-
-/**
  * 发送邮箱验证码
  * @param {string} email
  * @param {number} mode - 0: 修改密码, 1: 绑定邮箱
@@ -63,7 +48,7 @@ export function getUserById(id) {
   return request({
     url: '/weixiu/user/getUserById',
     method: 'POST',
-    data: { id }
+    params: { id }
   })
 }
 
@@ -110,10 +95,10 @@ export function deleteUsers(ids) {
 export function uploadImage(file) {
   const formData = new FormData()
   formData.append('file', file)
+  formData.append('bucket', 'PUBLIC')
   return request({
-    url: '/weixiu/user/upload',
+    url: '/weixiu/user/uploadByMinIO',
     method: 'POST',
-    data: formData,
-    headers: { 'Content-Type': 'multipart/form-data' }
+    data: formData
   })
 }

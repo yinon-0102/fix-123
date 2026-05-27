@@ -1,28 +1,54 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   House,
   User,
   Document,
   Setting,
-  ArrowLeft,
-  Check,
-  Search,
+  ArrowDown,
   ChatDotRound,
+  OfficeBuilding,
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
 
 const isCollapsed = ref(true)
-const headerSearchQuery = ref('')
+
+const userAvatar = computed(() => {
+  try {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+    return userInfo.name ? userInfo.name[0] : 'U'
+  } catch {
+    return 'U'
+  }
+})
+
+const userName = computed(() => {
+  try {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+    return userInfo.name || '管理员'
+  } catch {
+    return '管理员'
+  }
+})
+
+const userType = computed(() => {
+  try {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+    return userInfo.type == 1 ? '管理员' : '用户'
+  } catch {
+    return '管理员'
+  }
+})
 
 const menuItems = [
   { path: '/admin/dashboard', name: '首页概览', icon: House },
   { path: '/admin/users', name: '用户管理', icon: User },
   { path: '/admin/knowledge', name: '知识库管理', icon: Document },
   { path: '/admin/ai-chat', name: 'AI 对话', icon: ChatDotRound },
+  { path: '/admin/business', name: '业务管理', icon: OfficeBuilding },
   { path: '/admin/settings', name: '系统设置', icon: Setting },
 ]
 
@@ -35,12 +61,19 @@ function goToLogin() {
 }
 
 function isActive(path) {
+  if (path === '/admin/business') {
+    return route.path.startsWith('/admin/business')
+  }
   return route.path === path
 }
 
-function handleHeaderSearch() {
-  if (headerSearchQuery.value.trim()) {
-    router.push({ path: '/admin/knowledge', query: { q: headerSearchQuery.value } })
+function handleDropdown(command) {
+  if (command === 'logout') {
+    goToLogin()
+  } else if (command === 'profile') {
+    router.push('/admin/profile')
+  } else if (command === 'my-info') {
+    router.push('/admin/notify')
   }
 }
 </script>
@@ -78,17 +111,6 @@ function handleHeaderSearch() {
           <span class="nav-text" v-show="!isCollapsed">{{ item.name }}</span>
         </router-link>
       </nav>
-
-      <div class="sidebar-footer">
-        <div class="user-info" v-show="!isCollapsed">
-          <el-icon><User /></el-icon>
-          <span>admin</span>
-        </div>
-        <el-button text size="small" @click="goToLogin" v-show="!isCollapsed">
-          <el-icon><ArrowLeft /></el-icon>
-          退出
-        </el-button>
-      </div>
     </aside>
 
     <!-- Main Content -->
@@ -98,29 +120,23 @@ function handleHeaderSearch() {
         <div class="header-left">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/admin' }">管理后台</el-breadcrumb-item>
-            <el-breadcrumb-item v-if="route.path !== '/admin'">
-              {{ menuItems.find(m => m.path === route.path)?.name || '' }}
-            </el-breadcrumb-item>
           </el-breadcrumb>
         </div>
         <div class="header-right">
-          <div class="header-search">
-            <el-input
-              v-model="headerSearchQuery"
-              placeholder="搜索..."
-              size="small"
-              class="header-search-input"
-              @keyup.enter="handleHeaderSearch"
-            >
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
+          <el-dropdown @command="handleDropdown">
+            <div class="user-avatar">{{ userAvatar }}</div>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="profile">个人信息</el-dropdown-item>
+                <el-dropdown-item command="my-info">通知</el-dropdown-item>
+                <el-dropdown-item command="logout" divided>退出</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <div class="user-info">
+            <span class="user-name">{{ userName }}</span>
+            <span class="user-type">{{ userType }}</span>
           </div>
-          <span class="header-user">
-            <el-icon><User /></el-icon>
-            admin
-          </span>
         </div>
       </header>
 
@@ -273,22 +289,6 @@ function handleHeaderSearch() {
   white-space: nowrap;
 }
 
-.sidebar-footer {
-  padding: 16px;
-  border-top: 1px solid var(--plaza-border);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--plaza-text);
-  padding: 0 4px;
-}
-
 /* Main Content */
 .admin-main {
   flex: 1;
@@ -307,7 +307,8 @@ function handleHeaderSearch() {
 /* Header */
 .admin-header {
   height: 60px;
-  background: var(--plaza-bg-card);
+  background: #f5f5f5;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   border-bottom: 1px solid var(--plaza-border);
   display: flex;
   align-items: center;
@@ -321,34 +322,63 @@ function handleHeaderSearch() {
   display: flex;
   align-items: center;
   gap: 16px;
+  font-weight: 700;
+}
+.header-left :deep(.el-breadcrumb__inner) {
+  font-weight: 700 !important;
+  font-size: 18px !important;
 }
 .header-right {
   display: flex;
   align-items: center;
   gap: 16px;
 }
-.header-search {
-  width: 200px;
-}
-.header-search-input {
-  width: 100%;
-}
-.header-search-input :deep(.el-input__wrapper) {
-  border-radius: 8px;
-}
-.header-user {
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--plaza-accent);
+  color: #fff;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  margin-left: 120px;
+}
+.user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+}
+.user-name {
   font-size: 14px;
+  font-weight: 600;
   color: var(--plaza-text);
+  text-align: center;
+  line-height: 1.2;
+}
+.user-type {
+  padding: 2px 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--plaza-border);
+  font-size: 12px;
+  color: var(--plaza-text-muted);
+  text-align: center;
+  line-height: 1.2;
 }
 
 /* Content */
 .admin-content {
   flex: 1;
   padding: 32px 24px;
-  overflow: hidden;
+  overflow-y: auto;
   position: relative;
 }
 
@@ -359,9 +389,7 @@ function handleHeaderSearch() {
   }
   .sidebar-logo .logo-text,
   .admin-badge,
-  .nav-text,
-  .sidebar-footer .user-info,
-  .sidebar-footer .el-button span {
+  .nav-text {
     display: none;
   }
   .admin-main {

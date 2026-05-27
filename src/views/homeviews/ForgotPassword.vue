@@ -2,6 +2,8 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { Lock, Check, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { sendEmail, verifyEmail } from '@/api/user'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 
@@ -43,9 +45,16 @@ const formRef = ref(null)
 const countdown = ref(0)
 let countdownTimer = null
 
-const sendCode = () => {
-  if (!formData.username.trim() || !formData.email.trim()) return
+const sendCode = async () => {
+  if (!formData.email.trim()) return
   if (countdown.value > 0) return
+  try {
+    await sendEmail(formData.email, 2) // mode=2 = 找回密码
+    ElMessage.success('验证码已发送至您的邮箱')
+  } catch (e) {
+    ElMessage.error(e.message || '发送失败，请稍后重试')
+    return
+  }
   countdown.value = 60
   countdownTimer = setInterval(() => {
     countdown.value--
@@ -57,31 +66,48 @@ const sendCode = () => {
 }
 
 const handleNext = async () => {
-  if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    loading.value = true
-    if (countdownTimer) {
+  // 步骤1只验证用户名和邮箱
+  const usernameValid = formData.username.trim().length > 0
+  const emailValid = formData.email.trim().length > 0 && formData.email.includes('@')
+  if (!usernameValid || !emailValid) {
+    ElMessage.warning('请填写用户名和邮箱')
+    return
+  }
+  loading.value = true
+  try {
+    await sendEmail(formData.email, 0) // mode=0 = 重置密码
+    ElMessage.success('验证码已发送至您的邮箱')
+  } catch (e) {
+    ElMessage.error(e.message || '发送失败，请稍后重试')
+    loading.value = false
+    return
+  }
+  loading.value = false
+  step.value = 2
+  if (countdownTimer) clearInterval(countdownTimer)
+  countdown.value = 60
+  countdownTimer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
       clearInterval(countdownTimer)
       countdownTimer = null
     }
-    setTimeout(() => {
-      loading.value = false
-      sendCode()
-      step.value = 2
-    }, 800)
-  })
+  }, 1000)
 }
 
 const handleSubmit = async () => {
   if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
+  // 只验证步骤2相关字段
+  await formRef.value.validateField(['code', 'password', 'confirmPassword'], async (isValid) => {
+    if (!isValid) return
     loading.value = true
-    setTimeout(() => {
-      loading.value = false
+    try {
+      await verifyEmail(formData.code, 2, formData.password)
       step.value = 3
-    }, 800)
+    } catch (e) {
+      ElMessage.error(e.message || '验证失败，验证码错误或已过期')
+      loading.value = false
+    }
   })
 }
 

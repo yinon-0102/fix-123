@@ -23,6 +23,7 @@ export async function request(options) {
 
   const config = {
     method,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...headers,
@@ -30,7 +31,8 @@ export async function request(options) {
   }
 
   if (data && method !== 'GET') {
-    if (headers['Content-Type'] === 'multipart/form-data') {
+    if (data instanceof FormData) {
+      config.body = data
       delete config.headers['Content-Type']
     } else {
       config.body = JSON.stringify(data)
@@ -41,7 +43,17 @@ export async function request(options) {
 
   const contentType = response.headers.get('content-type')
   if (contentType && contentType.includes('application/json')) {
-    const json = await response.json()
+    let text = await response.text()
+    // 修复：大于 MAX_SAFE_INTEGER 的数字在解析前转为字符串，避免 JavaScript 精度丢失
+    // JavaScript 的 JSON.parse 会把超过 MAX_SAFE_INTEGER 的数字自动截断，reviver 无法恢复
+    // 因此在解析前用正则把大数（16位以上）转换成字符串
+    text = text.replace(/(\d{16,})/g, '"$1"')
+    const json = JSON.parse(text, (key, value) => {
+      if (typeof value === 'number' && Math.abs(value) > Number.MAX_SAFE_INTEGER) {
+        return String(value)
+      }
+      return value
+    })
     if (throwOnError && json.code !== '200') {
       throw new Error(json.message || json.msg || '请求失败')
     }

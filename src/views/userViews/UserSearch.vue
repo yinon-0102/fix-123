@@ -1,211 +1,390 @@
 <script setup>
-import { ref } from 'vue'
-import { Search, ArrowRight, Picture, Camera } from '@element-plus/icons-vue'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
+import { Search, Folder, Star, Trophy } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { getMaintenanceManualList, getMaintenanceManualDetail, getMaintenanceManualRank, startMaintenanceManualRead, maintenanceManualHeartbeat } from '@/api/maintenanceManual'
 
+const router = useRouter()
+
+const loading = ref(false)
 const searchQuery = ref('')
-const searchType = ref('text')
+const list = ref([])
+const recommendList = ref([])
+const rankList = ref([])
+const pagination = reactive({ page: 1, pageSize: 12, total: 0 })
+const rankType = ref('total')
+const currentReadSession = ref(null)
+const heartbeatTimer = ref(null)
+const HEARTBEAT_INTERVAL = 20000
 
-const hotSearches = ['发动机维修', '电气故障', '设备保养', '液压系统']
+const hotTags = ['发动机维修', '电气故障', '设备保养', '液压系统', '日常维护']
 
-const recentSearches = ref([
-  { keyword: '发动机维护', time: '2024-01-15', results: 15 },
-  { keyword: '电气故障诊断', time: '2024-01-14', results: 8 },
-])
-
-const searchResults = ref([
-  { title: '发动机日常维护标准流程', category: '发动机维修', content: '包含启动前检查、运行中监测、停机后保养等完整流程...' },
-  { title: '发动机故障代码解析', category: '故障诊断', content: '针对常见故障代码P0300、P0420等的诊断与处理方法...' },
-  { title: '发动机大修作业指引', category: '发动机维修', content: '发动机解体、检修、组装的标准作业流程与质量控制点...' },
-])
-
-function doSearch() {
-  // 模拟搜索
-  if (searchQuery.value.trim()) {
-    recentSearches.value.unshift({
-      keyword: searchQuery.value,
-      time: new Date().toLocaleDateString(),
-      results: Math.floor(Math.random() * 20) + 5
+async function loadList() {
+  loading.value = true
+  try {
+    const res = await getMaintenanceManualList({
+      page: pagination.page,
+      size: pagination.pageSize,
+      manualName: searchQuery.value || undefined,
     })
+    if (res.code === '200' || res.code === 200) {
+      list.value = res.data.records || res.data.list || []
+      pagination.total = res.data.total || 0
+    }
+  } catch (e) {
+    ElMessage.error('加载失败: ' + e.message)
+  } finally {
+    loading.value = false
   }
 }
 
-function useHotSearch(keyword) {
-  searchQuery.value = keyword
-  doSearch()
+async function loadRecommend() {
+  try {
+    const res = await getMaintenanceManualRank('week', 10)
+    if (res.code === '200' || res.code === 200) {
+      recommendList.value = res.data || []
+    }
+  } catch (e) {
+    console.warn('周榜加载失败', e.message)
+  }
+}
+
+async function loadRank() {
+  try {
+    const res = await getMaintenanceManualRank(rankType.value, 10)
+    if (res.code === '200' || res.code === 200) {
+      rankList.value = res.data || []
+      // 补充 fileSize 和 createdAt
+      await Promise.all(
+        rankList.value.map(async (item) => {
+          try {
+            const detail = await getMaintenanceManualDetail(item.manualId)
+            if (detail.code === '200' || detail.code === 200) {
+              item.fileSize = detail.data?.fileSize
+              item.createdAt = detail.data?.createdAt
+            }
+          } catch {
+            // 静默失败，不阻断展示
+          }
+        })
+      )
+    }
+  } catch (e) {
+    console.warn('排行榜加载失败', e.message)
+  }
+}
+
+onMounted(() => {
+  loadRecommend()
+  loadRank()
+})
+
+function handleSearch() {
+  if (!searchQuery.value.trim()) return
+  router.push({ path: '/user/search-result', query: { keyword: searchQuery.value } })
+}
+
+function handleSearchByTag(tag) {
+  router.push({ path: '/user/search-result', query: { keyword: tag } })
+}
+
+function changeRankType(type) {
+  rankType.value = type
+  loadRank()
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer.value) {
+    clearInterval(heartbeatTimer.value)
+    heartbeatTimer.value = null
+  }
+  currentReadSession.value = null
+}
+
+onBeforeUnmount(() => {
+  stopHeartbeat()
+})
+
+async function handleRead(id) {
+  // 开始阅读会话并启动心跳
+  try {
+    const startRes = await startMaintenanceManualRead(id)
+    if (startRes.code === '200' || startRes.code === 200) {
+      currentReadSession.value = startRes.data.readSessionId
+      await maintenanceManualHeartbeat(currentReadSession.value)
+      heartbeatTimer.value = setInterval(async () => {
+        if (currentReadSession.value) {
+          await maintenanceManualHeartbeat(currentReadSession.value)
+        }
+      }, HEARTBEAT_INTERVAL)
+    }
+  } catch (e) {
+    console.warn('阅读会话创建失败', e.message)
+  }
+
+  // 打开文件
+  try {
+    const res = await getMaintenanceManualDetail(id)
+    const fileUrl = res.data?.fileUrl
+    if (!fileUrl) {
+      ElMessage.error('文件链接不存在，请确认该手册已上传并解析完成')
+      return
+    }
+    window.open(fileUrl, '_blank')
+  } catch (e) {
+    ElMessage.error('打开手册失败：' + (e.message || '请稍后重试'))
+  }
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '-'
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleDateString('zh-CN')
+}
+
+function getFileTypeColor(fileType) {
+  const type = (fileType || 'pdf').toLowerCase().replace(/^\./, '')
+  if (type === 'pdf') return { bg: 'rgba(51,65,85,0.1)', accent: '#334155', label: 'PDF' }
+  if (type === 'docx' || type === 'doc') return { bg: 'rgba(59,130,246,0.1)', accent: '#3B82F6', label: 'WORD' }
+  if (type === 'xlsx' || type === 'xls') return { bg: 'rgba(34,197,94,0.1)', accent: '#22c55e', label: 'EXCEL' }
+  if (type === 'txt') return { bg: 'rgba(100,116,139,0.1)', accent: '#64748B', label: 'TXT' }
+  return { bg: 'rgba(51,65,85,0.1)', accent: '#334155', label: 'FILE' }
+}
+
+function getRankBadgeClass(index) {
+  if (index === 0) return 'rank-gold'
+  if (index === 1) return 'rank-silver'
+  if (index === 2) return 'rank-bronze'
+  return ''
 }
 </script>
 
 <template>
   <div class="user-search">
-    <!-- Page Header -->
-    <div class="page-header">
-      <h2 class="page-title">智能检索</h2>
-      <p class="page-desc">输入设备型号、故障描述或上传图片，智能匹配检修方案</p>
+    <!-- Page Header Card -->
+    <div class="page-header-card">
+      <div class="page-header">
+        <div class="page-title-area">
+          <h2 class="page-title">智能检索</h2>
+          <p class="page-desc">搜索并阅读管理员上传的维修手册</p>
+        </div>
+      </div>
     </div>
 
-    <!-- Search Box -->
-    <div class="search-box">
-      <div class="search-type-tabs">
-        <button
-          class="type-tab"
-          :class="{ active: searchType === 'text' }"
-          @click="searchType = 'text'"
-        >
-          <el-icon><Search /></el-icon>
-          文本检索
-        </button>
-        <button
-          class="type-tab"
-          :class="{ active: searchType === 'image' }"
-          @click="searchType = 'image'"
-        >
-          <el-icon><Picture /></el-icon>
-          图片检索
-        </button>
-      </div>
-
-      <div class="search-input-area">
-        <el-input
-          v-model="searchQuery"
-          placeholder="输入设备型号、故障描述..."
-          size="large"
-          class="search-input"
-          @keyup.enter="doSearch"
-        >
-          <template #prefix>
+    <!-- Search Bar — 悬浮卡片风格 -->
+    <div class="search-bar-wrapper">
+      <div class="search-bar-card">
+        <div class="search-bar-inner">
+          <el-input
+            v-model="searchQuery"
+            placeholder="搜索手册名称..."
+            class="search-input"
+            clearable
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+          <el-button type="primary" class="search-btn" @click="handleSearch">
             <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <el-button type="primary" size="large" class="search-btn" @click="doSearch">
-          搜索
-          <el-icon class="btn-icon"><ArrowRight /></el-icon>
-        </el-button>
+            搜索
+          </el-button>
+        </div>
+        <div class="hot-tags">
+          <span class="hot-label">热门搜索：</span>
+          <span
+            v-for="tag in hotTags"
+            :key="tag"
+            class="hot-tag"
+            @click="handleSearchByTag(tag)"
+          >
+            {{ tag }}
+          </span>
+        </div>
       </div>
+    </div>
 
-      <div class="hot-searches">
-        <span class="hot-label">热门搜索：</span>
-        <span
-          v-for="keyword in hotSearches"
-          :key="keyword"
-          class="hot-tag"
-          @click="useHotSearch(keyword)"
+    <!-- 推荐专区 -->
+    <div class="section-card">
+      <div class="section-header">
+        <el-icon class="section-icon"><Star /></el-icon>
+        <h3 class="section-title">为你推荐</h3>
+      </div>
+      <div v-if="recommendList.length" class="recommend-scroll">
+        <div
+          v-for="item in recommendList"
+          :key="item.id"
+          class="recommend-card"
+          @click="handleRead(item.id)"
         >
-          {{ keyword }}
-        </span>
-      </div>
-    </div>
-
-    <!-- Results -->
-    <div v-if="searchResults.length" class="search-results">
-      <h3 class="results-title">搜索结果</h3>
-      <div class="results-list">
-        <div v-for="result in searchResults" :key="result.title" class="result-card">
-          <div class="result-header">
-            <h4 class="result-title">{{ result.title }}</h4>
-            <span class="result-category">{{ result.category }}</span>
+          <div class="recommend-cover">
+            <svg v-if="(item.fileType || 'pdf').toLowerCase().replace(/^\./, '') === 'pdf'" class="file-icon-svg" viewBox="0 0 48 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 4h24l12 12v44H8V4z" fill="#F8F9FF" stroke="#334155" stroke-width="1.5"/>
+              <path d="M28 4v12h12" fill="#CBDBF5" stroke="#334155" stroke-width="1.5"/>
+              <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#334155" opacity="0.6"/>
+              <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#334155" opacity="0.4"/>
+              <rect x="14" y="40" width="18" height="3" rx="1.5" fill="#334155" opacity="0.25"/>
+              <text x="16" y="22" font-family="sans-serif" font-size="8" fill="#334155" font-weight="700">PDF</text>
+            </svg>
+            <svg v-else class="file-icon-svg" viewBox="0 0 48 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 4h24l12 12v44H8V4z" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+              <path d="M28 4v12h12" fill="#DBEAFE" stroke="#3B82F6" stroke-width="1.5"/>
+              <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#3B82F6" opacity="0.6"/>
+              <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#3B82F6" opacity="0.4"/>
+              <text x="12" y="22" font-family="sans-serif" font-size="7" fill="#3B82F6" font-weight="700">FILE</text>
+            </svg>
           </div>
-          <p class="result-content">{{ result.content }}</p>
-          <div class="result-footer">
-            <span class="result-action">查看详情</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Recent -->
-    <div v-if="recentSearches.length && !searchResults.length" class="recent-section">
-      <h3 class="section-title">最近检索</h3>
-      <div class="recent-list">
-        <div v-for="item in recentSearches" :key="item.keyword" class="recent-item">
-          <div class="recent-info">
-            <span class="recent-keyword">{{ item.keyword }}</span>
-            <span class="recent-meta">{{ item.results }} 条结果 · {{ item.time }}</span>
+          <div class="recommend-info">
+            <h4 class="recommend-name">{{ item.manualName }}</h4>
+            <p class="recommend-desc">{{ item.manualDesc || '暂无简介' }}</p>
           </div>
         </div>
       </div>
+      <div v-else class="recommend-empty">
+        <el-icon class="empty-icon"><Star /></el-icon>
+        <p>暂无推荐手册</p>
+      </div>
+    </div>
+
+    <!-- 排行榜 -->
+    <div class="section-card">
+      <div class="section-header">
+        <el-icon class="section-icon"><Trophy /></el-icon>
+        <h3 class="section-title">热门排行榜</h3>
+      </div>
+      <div class="rank-tabs">
+        <button
+          v-for="t in ['day', 'week', 'month', 'total']"
+          :key="t"
+          class="rank-tab"
+          :class="{ active: rankType === t }"
+          @click="changeRankType(t)"
+        >
+          {{ { day: '日榜', week: '周榜', month: '月榜', total: '总榜' }[t] }}
+        </button>
+      </div>
+      <div v-if="rankList.length" class="rank-list">
+        <div class="rank-list-header">
+          <span class="rank-col-rank">排名</span>
+          <span class="rank-col-name">手册名称</span>
+          <span class="rank-col-size">大小</span>
+          <span class="rank-col-date">日期</span>
+          <span class="rank-col-action">操作</span>
+        </div>
+        <div
+          v-for="(item, index) in rankList"
+          :key="item.manualId"
+          class="rank-row"
+          @click="handleRead(item.manualId)"
+        >
+          <div class="rank-col-rank">
+            <span class="rank-badge" :class="getRankBadgeClass(index)">{{ index + 1 }}</span>
+          </div>
+          <div class="rank-col-name">
+            <span class="file-type-badge" :style="{ background: getFileTypeColor(item.fileType).bg, color: getFileTypeColor(item.fileType).accent }">
+              {{ getFileTypeColor(item.fileType).label }}
+            </span>
+            <span class="rank-manual-name">{{ item.manualName }}</span>
+          </div>
+          <div class="rank-col-size">{{ formatSize(item.fileSize) }}</div>
+          <div class="rank-col-date">{{ formatDate(item.createdAt) }}</div>
+          <div class="rank-col-action">
+            <button class="rank-read-btn">阅读</button>
+          </div>
+        </div>
+      </div>
+      <div v-else class="rank-empty">暂无排行数据</div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .user-search {
-  max-width: 900px;
+  width: 90%;
   margin: 0 auto;
+  padding: 8px 0 32px;
+}
+
+/* ── Page Header Card ── */
+.page-header-card {
+  margin-top: -10px;
+  width: 100%;
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px 28px 52px;
+  margin-bottom: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
 .page-header {
-  margin: 0 0 28px 0;
-  padding: 0;
-  /* 确保盒子贴顶，无额外边距 */
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 .page-title {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--plaza-text);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  letter-spacing: -0.02em;
 }
 .page-desc {
   font-size: 14px;
   color: var(--plaza-text-muted);
 }
 
-.search-box {
-  background: var(--plaza-bg-card);
-  border: 1px solid var(--plaza-border);
-  border-radius: 16px;
-  padding: 24px;
+/* ── Search Bar — 悬浮卡片风格 ── */
+.search-bar-wrapper {
+  position: relative;
+  z-index: 10;
+  margin-top: -28px;
   margin-bottom: 28px;
 }
-
-.search-type-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+.search-bar-card {
+  max-width: 640px;
+  margin: 0 auto;
+  background: var(--plaza-bg-card);
+  border: 1.5px solid var(--plaza-border);
+  border-radius: var(--plaza-radius-lg);
+  padding: 16px 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
 }
-.type-tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: var(--plaza-bg);
-  border: 1px solid var(--plaza-border);
-  border-radius: 8px;
-  font-size: 14px;
-  color: var(--plaza-text-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.type-tab.active {
-  background: var(--plaza-accent-soft);
-  border-color: var(--plaza-accent);
-  color: var(--plaza-accent);
-  font-weight: 500;
-}
-
-.search-input-area {
+.search-bar-inner {
   display: flex;
   gap: 12px;
-  margin-bottom: 16px;
+  align-items: center;
 }
 .search-input {
   flex: 1;
 }
 .search-btn {
-  background: var(--plaza-accent) !important;
-  border: none !important;
-  padding: 12px 24px !important;
-  border-radius: 10px !important;
-  font-weight: 600;
+  background: var(--plaza-accent);
+  border-color: var(--plaza-accent);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
-.btn-icon {
-  margin-left: 6px;
+.search-btn:hover {
+  background: var(--plaza-accent-hover);
+  border-color: var(--plaza-accent-hover);
 }
 
-.hot-searches {
+/* ── 热门标签 ── */
+.hot-tags {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  margin-top: 12px;
 }
 .hot-label {
   font-size: 13px;
@@ -226,86 +405,402 @@ function useHotSearch(keyword) {
   color: var(--plaza-accent);
 }
 
-.results-title,
+/* ── 通用区块卡片 ── */
+.section-card {
+  background: var(--plaza-bg-card);
+  border: 1px solid var(--plaza-border);
+  border-radius: var(--plaza-radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.section-icon {
+  font-size: 20px;
+  color: var(--plaza-accent);
+}
 .section-title {
   font-size: 1rem;
   font-weight: 600;
   color: var(--plaza-text);
-  margin-bottom: 16px;
 }
 
-.results-list {
+/* ── 推荐横向滚动 ── */
+.recommend-scroll {
   display: flex;
-  flex-direction: column;
   gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 8px;
 }
-.result-card {
-  background: var(--plaza-bg-card);
+.recommend-card {
+  flex-shrink: 0;
+  width: 180px;
+  background: var(--plaza-bg);
   border: 1px solid var(--plaza-border);
-  border-radius: 14px;
-  padding: 20px;
-  transition: border-color 0.2s ease;
+  border-radius: var(--plaza-radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
-.result-card:hover {
+.recommend-card:hover {
   border-color: var(--plaza-accent);
+  transform: translateY(-2px);
 }
-.result-header {
+.recommend-cover {
   display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-.result-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--plaza-text);
-}
-.result-category {
-  padding: 3px 10px;
-  background: var(--plaza-accent-soft);
-  color: var(--plaza-accent);
-  border-radius: 8px;
-  font-size: 12px;
-}
-.result-content {
-  font-size: 14px;
-  color: var(--plaza-text-muted);
-  line-height: 1.6;
+  height: 80px;
   margin-bottom: 12px;
 }
-.result-footer {
-  display: flex;
-  justify-content: flex-end;
+.file-icon-svg {
+  width: 40px;
+  height: 52px;
 }
-.result-action {
-  font-size: 13px;
-  color: var(--plaza-accent);
-  cursor: pointer;
+.recommend-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--plaza-text);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.recent-list {
+.recommend-desc {
+  font-size: 12px;
+  color: var(--plaza-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+}
+.recommend-empty {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--plaza-text-muted);
+  gap: 8px;
 }
-.recent-item {
+.recommend-empty .empty-icon {
+  font-size: 32px;
+  opacity: 0.4;
+}
+.recommend-empty p {
+  font-size: 14px;
+}
+
+/* ── 排行榜 ── */
+.rank-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.rank-tab {
+  padding: 6px 16px;
+  background: var(--plaza-bg);
+  border: 1px solid var(--plaza-border);
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--plaza-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.rank-tab.active {
+  background: var(--plaza-accent-soft);
+  border-color: var(--plaza-accent);
+  color: var(--plaza-accent);
+  font-weight: 500;
+}
+
+.rank-list {
+  width: 100%;
+}
+
+.rank-list-header {
   display: flex;
   align-items: center;
-  padding: 14px 16px;
-  background: var(--plaza-bg-card);
+  padding: 10px 16px;
+  background: var(--plaza-bg);
   border: 1px solid var(--plaza-border);
-  border-radius: 12px;
+  border-radius: var(--plaza-radius) var(--plaza-radius) 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--plaza-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
-.recent-keyword {
-  display: block;
+
+.rank-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--plaza-bg-card);
+  border-left: 1px solid var(--plaza-border);
+  border-right: 1px solid var(--plaza-border);
+  border-bottom: 1px solid var(--plaza-border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.rank-row:last-child {
+  border-radius: 0 0 var(--plaza-radius) var(--plaza-radius);
+  border-bottom: 1px solid var(--plaza-border);
+}
+.rank-row:hover {
+  background: var(--plaza-accent-soft);
+}
+.rank-row:hover .rank-read-btn {
+  opacity: 1;
+}
+
+.rank-col-rank {
+  width: 60px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+.rank-col-name {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.rank-col-size {
+  width: 80px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--plaza-text-muted);
+}
+.rank-col-date {
+  width: 80px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--plaza-text-muted);
+}
+.rank-col-action {
+  width: 60px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--plaza-bg);
+  border: 1px solid var(--plaza-border);
+  color: var(--plaza-text-muted);
+}
+.rank-badge.rank-gold {
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  border-color: #F59E0B;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+.rank-badge.rank-silver {
+  background: linear-gradient(135deg, #475569, #334155);
+  border-color: #475569;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(71, 85, 105, 0.3);
+}
+.rank-badge.rank-bronze {
+  background: linear-gradient(135deg, #D97706, #92400E);
+  border-color: #D97706;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
+}
+
+.file-type-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.rank-manual-name {
   font-size: 14px;
   font-weight: 500;
   color: var(--plaza-text);
-  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.recent-meta {
-  display: block;
+
+.rank-read-btn {
+  opacity: 0;
+  padding: 4px 12px;
+  background: var(--plaza-accent);
+  border: none;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.rank-read-btn:hover {
+  background: var(--plaza-accent-hover);
+}
+
+.rank-empty {
+  text-align: center;
+  padding: 32px;
+  color: var(--plaza-text-muted);
+  font-size: 14px;
+}
+
+/* ── 电子书架 ── */
+.knowledge-bookshelf {
+  min-height: 320px;
+}
+.book-row {
+  width: 100%;
+}
+.book-col {
+  margin-bottom: 20px;
+}
+
+.book-card {
+  background: var(--plaza-bg-card);
+  border: 1px solid var(--plaza-border);
+  border-radius: var(--plaza-radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+.book-card:hover {
+  border-color: var(--plaza-accent);
+  box-shadow: var(--plaza-shadow-organic-hover);
+  transform: translateY(-2px);
+}
+
+.book-cover {
+  background: var(--plaza-bg);
+  padding: 28px 20px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.file-icon-badge {
+  width: 80px;
+  height: 100px;
+  border-radius: 8px;
+  border: 1.5px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.file-icon-badge .file-icon-svg {
+  width: 52px;
+  height: 68px;
+}
+
+.book-info {
+  padding: 16px 16px 12px;
+  flex: 1;
+}
+.book-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--plaza-text);
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+  min-height: 2.8em;
+}
+.book-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.file-type-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.05em;
+}
+.file-size {
   font-size: 12px;
   color: var(--plaza-text-muted);
+}
+.book-date {
+  font-size: 12px;
+  color: var(--plaza-text-muted);
+}
+
+/* ── 空状态 ── */
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 360px;
+  width: 100%;
+}
+.empty-shelf {
+  text-align: center;
+}
+.shelf-icon-wrapper {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--plaza-bg-card);
+  border: 1.5px dashed var(--plaza-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+}
+.empty-icon {
+  font-size: 36px;
+  color: var(--plaza-text-muted);
+  opacity: 0.4;
+}
+.empty-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--plaza-text);
+  margin-bottom: 8px;
+}
+.empty-hint {
+  font-size: 13px;
+  color: var(--plaza-text-muted);
+}
+
+/* ── 分页 ── */
+.pagination-bar {
+  margin-top: 28px;
+  display: flex;
+  justify-content: center;
 }
 </style>

@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { Search, Plus, Download, Delete, Upload, Document, Folder, Files } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getMaintenanceManualList, deleteMaintenanceManual, getMaintenanceManualDetail } from '@/api/maintenanceManual'
+import { getMaintenanceManualList, deleteMaintenanceManual } from '@/api/maintenanceManual'
 import MaintenanceManualUpload from '@/components/MaintenanceManualUpload.vue'
 import MaintenanceManualUpdate from '@/components/MaintenanceManualUpdate.vue'
 
@@ -62,45 +62,35 @@ function handleUploadSuccess() {
   loadList()
 }
 
-async function handleDownload(id) {
-  try {
-    const res = await getMaintenanceManualDetail(id)
-    const fileUrl = res.data?.fileUrl
-    if (!fileUrl) {
-      ElMessage.error('文件链接不存在，请确认该手册的文件已上传并解析完成')
-      return
-    }
-    const fileName = (res.data?.manualName || 'document') + '.' + ((res.data?.fileType || '.pdf').replace(/^\./, ''))
-    // 通过 fetch 获取文件 Blob，再用 <a download> 强制下载，避免浏览器预览
-    const response = await fetch(fileUrl)
-    if (!response.ok) throw new Error('文件获取失败')
-    const blob = await response.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = blobUrl
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(blobUrl)
-    ElMessage.success('下载成功')
-  } catch (e) {
-    ElMessage.error('下载失败：' + (e.message || '请稍后重试'))
+async function handleDownload(item) {
+  const fileUrl = item.fileUrl
+  if (!fileUrl) {
+    ElMessage.error('文件链接不存在，请确认该手册的文件已上传并解析完成')
+    return
   }
+  const fileName = (item.manualName || 'document') + '.' + ((item.fileType || '.pdf').replace(/^\./, ''))
+  // 通过 fetch 获取文件 Blob，再用 <a download> 强制下载，避免浏览器预览
+  const response = await fetch(fileUrl)
+  if (!response.ok) throw new Error('文件获取失败')
+  const blob = await response.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(blobUrl)
+  ElMessage.success('下载成功')
 }
 
-async function handlePreview(id) {
-  try {
-    const res = await getMaintenanceManualDetail(id)
-    const fileUrl = res.data?.fileUrl
-    if (!fileUrl) {
-      ElMessage.error('文件链接不存在，请确认该手册的文件已上传并解析完成')
-      return
-    }
-    window.open(fileUrl, '_blank')
-  } catch (e) {
-    ElMessage.error('预览失败：' + (e.message || '请稍后重试'))
+async function handlePreview(item) {
+  const fileUrl = item.fileUrl
+  if (!fileUrl) {
+    ElMessage.error('文件链接不存在，请确认该手册的文件已上传并解析完成')
+    return
   }
+  window.open(fileUrl, '_blank')
 }
 
 async function handleDelete(id) {
@@ -233,7 +223,7 @@ function getFileTypeColor(fileType) {
           :lg="6"
           class="book-col"
         >
-          <div class="book-card" :class="`file-${(item.fileType || 'pdf').toLowerCase()}`" @click="handlePreview(item.id)">
+          <div class="book-card" :class="`file-${(item.fileType || 'pdf').toLowerCase()}`" @click="handlePreview(item)">
             <!-- 文件图标区域 -->
             <div class="book-cover">
               <div
@@ -289,7 +279,7 @@ function getFileTypeColor(fileType) {
 
             <!-- 书架底部操作区 -->
             <div class="book-actions">
-              <el-button size="small" class="action-btn download-btn" @click.stop="handleDownload(item.id)">
+              <el-button size="small" class="action-btn download-btn" @click.stop="handleDownload(item)">
                 <el-icon><Download /></el-icon>
                 下载
               </el-button>

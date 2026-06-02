@@ -641,13 +641,11 @@ onMounted(() => {
 .user-message .message-text {
   background: var(--plaza-accent);
   color: #fff;
-  border-bottom-right-radius: 4px;
 }
 
 .ai-message .message-text {
   background: var(--plaza-bg-card);
   color: var(--plaza-text);
-  border-bottom-left-radius: 4px;
 }
 
 .message-time {

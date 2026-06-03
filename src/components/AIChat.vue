@@ -403,7 +403,7 @@ onMounted(() => {
               <img :src="img" alt="上传图片" />
             </div>
           </div>
-          <div class="message-text" v-html="msg.content.replace(/\n/g, '<br>')"></div>
+          <div v-if="msg.content" class="message-text" v-html="msg.content.replace(/\n/g, '<br>')"></div>
           <div class="message-time">{{ msg.timestamp }}</div>
         </div>
       </div>
@@ -655,7 +655,13 @@ onMounted(() => {
 }
 
 .message-content {
-  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.user-message .message-content {
+  align-items: flex-end;
 }
 
 .message-text {

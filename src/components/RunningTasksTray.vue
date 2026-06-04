@@ -45,7 +45,7 @@ function elapsed(ts) {
   bottom: 20px;
   width: 300px;
   background: #fff;
-  border: 1px solid #CBDBF5;
+  border: 1px solid #e6eaf1;
   border-radius: 12px;
   box-shadow: 0 12px 36px rgba(51, 65, 85, 0.16);
   z-index: 3000;

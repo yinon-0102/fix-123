@@ -59,7 +59,7 @@ function nodeStyle() {
     labelBackgroundFill: 'rgba(255,255,255,0.92)',
     labelBackgroundRadius: 4,
     labelBackgroundLineWidth: 1,
-    labelBackgroundStroke: '#CBDBF5',
+    labelBackgroundStroke: '#e6eaf1',
     labelPadding: [2, 6],
   }
 }
@@ -418,7 +418,7 @@ onBeforeUnmount(() => { clearTimeout(renderTimer); graph.value?.destroy() })
 
 <style scoped>
 .kg-root{
-  --bg:#F8F9FF; --card:#FFFFFF; --line:#CBDBF5; --line-soft:#E3ECFA;
+  --bg:#f6f8fb; --card:#FFFFFF; --line:#e6eaf1; --line-soft:#E3ECFA;
   --primary:#3b82f6; --slate:#334155; --mut:#64748B; --amber:#f59e0b;
   --shadow:0 2px 12px rgba(51,65,85,.06),0 1px 3px rgba(51,65,85,.03);
   --shadow-lg:0 8px 30px rgba(51,65,85,.1);
@@ -458,7 +458,7 @@ onBeforeUnmount(() => { clearTimeout(renderTimer); graph.value?.destroy() })
 .panel-h::before{content:'';display:inline-block;width:3px;height:12px;background:var(--primary);border-radius:2px;margin-right:7px;vertical-align:-1px}
 .ops{flex-direction:row;gap:8px}
 .hud-btn{background:var(--primary);color:#fff;border:1px solid var(--primary);border-radius:8px;padding:9px;font-weight:600;font-size:13px;letter-spacing:.5px;cursor:pointer;transition:.18s;box-shadow:0 2px 8px rgba(59,130,246,.25)}
-.hud-btn:hover{background:#2f6fe0;box-shadow:0 4px 14px rgba(59,130,246,.32)}
+.hud-btn:hover{background:#2563eb;box-shadow:0 4px 14px rgba(59,130,246,.32)}
 .hud-btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
 .b-amber{background:#fff;color:#d97706;border-color:#fcd9a6;box-shadow:none} .b-amber:hover{background:#fff7ed}
 .b-warn{background:#fff;color:#d97706;border-color:#fcd9a6;box-shadow:none} .b-warn:hover{background:#fff7ed}

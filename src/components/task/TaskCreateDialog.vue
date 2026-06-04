@@ -147,18 +147,18 @@ async function submit() {
 <style scoped>
 .hint { font-size: 12px; color: #94a3b8; margin-left: 10px; }
 .imgs { display: flex; flex-wrap: wrap; gap: 10px; }
-.img-item { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid #CBDBF5; }
+.img-item { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid #e6eaf1; }
 .img-item img { width: 100%; height: 100%; object-fit: cover; }
 .img-x { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border: none; border-radius: 50%;
   background: rgba(15,23,42,.6); color: #fff; font-size: 11px; cursor: pointer; line-height: 1; }
-.img-add { width: 72px; height: 72px; border: 1px dashed #CBDBF5; border-radius: 8px; display: flex; align-items: center;
+.img-add { width: 72px; height: 72px; border: 1px dashed #e6eaf1; border-radius: 8px; display: flex; align-items: center;
   justify-content: center; font-size: 13px; color: #3b82f6; cursor: pointer; background: #f8faff; }
 .img-add.busy { color: #94a3b8; cursor: default; }
 .img-add:hover { background: #eaf2ff; }
 .dlg-btn { padding: 8px 18px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid; transition: .15s; }
-.dlg-btn.cancel { background: #fff; color: #64748b; border-color: #CBDBF5; margin-right: 8px; }
+.dlg-btn.cancel { background: #fff; color: #64748b; border-color: #e6eaf1; margin-right: 8px; }
 .dlg-btn.cancel:hover { color: #334155; }
 .dlg-btn.ok { background: #3b82f6; color: #fff; border-color: #3b82f6; }
-.dlg-btn.ok:hover { background: #2f6fe0; }
+.dlg-btn.ok:hover { background: #2563eb; }
 .dlg-btn.ok:disabled { opacity: .6; cursor: not-allowed; }
 </style>

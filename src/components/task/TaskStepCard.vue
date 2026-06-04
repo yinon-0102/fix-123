@@ -131,7 +131,7 @@ async function forceComplete() {
 </template>
 
 <style scoped>
-.step { border: 1px solid #CBDBF5; border-radius: 12px; background: #fff; padding: 14px 16px; box-shadow: 0 2px 12px rgba(51,65,85,.05); }
+.step { border: 1px solid #e6eaf1; border-radius: 12px; background: #fff; padding: 14px 16px; box-shadow: 0 2px 12px rgba(51,65,85,.05); }
 .step.active { border-color: #3b82f6; box-shadow: 0 4px 18px rgba(59,130,246,.14); }
 .step.done { background: #fcfefc; }
 .s-head { display: flex; align-items: center; gap: 10px; }
@@ -149,10 +149,10 @@ async function forceComplete() {
 .s-check ul { margin: 0; padding-left: 18px; font-size: 13px; color: #475569; }
 .s-meta { display: flex; align-items: center; gap: 12px; font-size: 12px; color: #94a3b8; flex-wrap: wrap; }
 .s-meta .req { color: #d97706; }
-.s-chat { margin-left: auto; border: 1px solid #CBDBF5; background: #fff; color: #3b82f6; border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.s-chat { margin-left: auto; border: 1px solid #e6eaf1; background: #fff; color: #3b82f6; border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
 .s-chat:hover { background: #f5f9ff; }
 .s-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-.s-imgs img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid #CBDBF5; }
+.s-imgs img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid #e6eaf1; }
 .s-note { font-size: 13px; color: #475569; margin: 6px 0 0; }
 .s-ai { margin-top: 10px; padding: 9px 12px; border-radius: 8px; font-size: 13px; }
 .s-ai.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; }
@@ -161,16 +161,16 @@ async function forceComplete() {
 .s-ai .reason { margin: 6px 0 0; color: #475569; line-height: 1.6; }
 .s-exec { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 .imgs { display: flex; flex-wrap: wrap; gap: 8px; }
-.img-item { position: relative; width: 64px; height: 64px; border-radius: 8px; overflow: hidden; border: 1px solid #CBDBF5; }
+.img-item { position: relative; width: 64px; height: 64px; border-radius: 8px; overflow: hidden; border: 1px solid #e6eaf1; }
 .img-item img { width: 100%; height: 100%; object-fit: cover; }
 .img-x { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border: none; border-radius: 50%; background: rgba(15,23,42,.6); color: #fff; font-size: 11px; cursor: pointer; line-height: 1; }
-.img-add { width: 64px; height: 64px; border: 1px dashed #CBDBF5; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #3b82f6; cursor: pointer; background: #f8faff; }
+.img-add { width: 64px; height: 64px; border: 1px dashed #e6eaf1; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #3b82f6; cursor: pointer; background: #f8faff; }
 .img-add:hover { background: #eaf2ff; }
 .ck { font-size: 13px; color: #475569; display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .s-actions { display: flex; gap: 10px; }
 .act { padding: 8px 18px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid; }
 .act.ok { background: #3b82f6; color: #fff; border-color: #3b82f6; }
-.act.ok:hover { background: #2f6fe0; }
+.act.ok:hover { background: #2563eb; }
 .act.force { background: #fff; color: #d97706; border-color: #fcd9a6; }
 .act.force:hover { background: #fff7ed; }
 .act:disabled { opacity: .6; cursor: not-allowed; }

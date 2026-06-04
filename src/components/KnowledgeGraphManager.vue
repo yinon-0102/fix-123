@@ -80,7 +80,7 @@ function buildGraph() {
         labelPlacement: 'bottom', labelOffsetY: 4,
         labelBackground: true, labelBackgroundFill: 'rgba(255,255,255,0.92)',
         labelBackgroundRadius: 4, labelBackgroundLineWidth: 1,
-        labelBackgroundStroke: '#CBDBF5', labelPadding: [2, 6],
+        labelBackgroundStroke: '#e6eaf1', labelPadding: [2, 6],
       },
       state: {
         active:   { lineWidth: 2.6, halo: true, haloStroke: '#3b82f6', haloOpacity: 0.14 },
@@ -464,7 +464,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); graph.value?.destroy() })
 
 <style scoped>
 .kg-root{
-  --bg:#F8F9FF; --card:#FFFFFF; --line:#CBDBF5; --primary:#3b82f6; --slate:#334155; --mut:#64748B; --amber:#f59e0b;
+  --bg:#f6f8fb; --card:#FFFFFF; --line:#e6eaf1; --primary:#3b82f6; --slate:#334155; --mut:#64748B; --amber:#f59e0b;
   --shadow:0 2px 12px rgba(51,65,85,.06),0 1px 3px rgba(51,65,85,.03);
   --shadow-lg:0 8px 30px rgba(51,65,85,.1);
   position:absolute; inset:0; display:flex; flex-direction:column;
@@ -495,7 +495,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); graph.value?.destroy() })
 .panel-h::before{content:'';display:inline-block;width:3px;height:12px;background:var(--primary);border-radius:2px;margin-right:7px;vertical-align:-1px}
 .ops{flex-direction:row;gap:8px}
 .hud-btn{background:var(--primary);color:#fff;border:1px solid var(--primary);border-radius:8px;padding:9px;font-weight:600;font-size:13px;letter-spacing:.5px;cursor:pointer;transition:.18s;box-shadow:0 2px 8px rgba(59,130,246,.25)}
-.hud-btn:hover{background:#2f6fe0}
+.hud-btn:hover{background:#2563eb}
 .hud-btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
 .hud-btn.ghost{background:#fff;color:var(--primary);box-shadow:none}
 .hud-btn.ghost:hover{background:#f5f9ff}
@@ -557,6 +557,6 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); graph.value?.destroy() })
 .dlg-btn.cancel{background:#fff;color:var(--mut);border-color:var(--line);margin-right:8px}
 .dlg-btn.cancel:hover{color:var(--slate)}
 .dlg-btn.ok{background:var(--primary);color:#fff;border-color:var(--primary)}
-.dlg-btn.ok:hover{background:#2f6fe0}
+.dlg-btn.ok:hover{background:#2563eb}
 .dlg-btn.ok:disabled{opacity:.6;cursor:not-allowed}
 </style>

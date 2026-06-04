@@ -16,9 +16,12 @@ const props = defineProps({
 
 const isTyping = ref(false)
 const isGenerating = ref(false)   // 整个生成过程（用于显示「停止」按钮）
-const abortController = ref(null) // 当前流式请求的中断器
+const abortController = ref(null) // 当前流式请求的中断器（保留，停止时不再主动 abort）
+const skipAnimation = ref(false)  // 点「停止」后跳过打字机，直接把剩余内容一次性展示出来
 function stopGeneration() {
-  if (abortController.value) abortController.value.abort()
+  // 不中断后端连接（避免半截 SSE 触发后端异常）：仅跳过逐字动画，立即显示全部已生成内容
+  skipAnimation.value = true
+  isGenerating.value = false
 }
 const showHistory = ref(false)
 const userScrolledUp = ref(false)
@@ -101,6 +104,7 @@ async function handleBottomInputSend(payload) {
   messages.value.push(userMessage)
   isTyping.value = true
   isGenerating.value = true
+  skipAnimation.value = false
   const controller = new AbortController()
   abortController.value = controller
   saveCurrentSession()
@@ -141,6 +145,18 @@ async function handleBottomInputSend(payload) {
 
     // 打字机定时器：每 30ms 将 displayContent 逐字追赶 aiContent
     const typewriterTimer = setInterval(() => {
+      // 点了「停止」→ 跳过逐字效果，把已收到的内容一次性全部显示
+      if (skipAnimation.value) {
+        if (displayContent.length !== aiContent.length) {
+          displayContent = aiContent
+          const msgIndex = messages.value.length - 1
+          if (msgIndex >= 0) {
+            messages.value[msgIndex].content = displayContent.replace(/\n/g, '<br>')
+          }
+          scrollToBottom()
+        }
+        return
+      }
       if (displayContent.length < aiContent.length) {
         displayContent = aiContent.substring(0, displayContent.length + 2)
         const msgIndex = messages.value.length - 1
@@ -196,7 +212,8 @@ async function handleBottomInputSend(payload) {
           }
 
           scrollToBottom()
-          await new Promise(resolve => setTimeout(resolve, 50))
+          // 不再人为延迟读取：让前端展示进度贴近 Java 实际接收进度，
+          // 这样"停止"时后端保存的 partial 与用户所见基本一致（节流已移到 Python 端）
         }
       }
 

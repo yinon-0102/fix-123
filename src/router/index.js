@@ -124,6 +124,16 @@ const routes = [
         path: 'search-result',
         name: 'UserSearchResult',
         component: () => import('../views/userViews/UserSearchResult.vue')
+      },
+      {
+        path: 'tasks',
+        name: 'UserTasks',
+        component: () => import('../views/userViews/UserTasks.vue')
+      },
+      {
+        path: 'tasks/:id',
+        name: 'UserTaskDetail',
+        component: () => import('../views/userViews/UserTaskDetail.vue')
       }
     ]
   }

@@ -10,6 +10,7 @@ import {
   ArrowDown,
   ChatDotRound,
   Share,
+  Tickets,
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -53,6 +54,7 @@ const menuItems = [
   { path: '/user/search', name: '智能检索', icon: Search },
   { path: '/user/guide', name: '作业指引', icon: DocumentChecked },
   { path: '/user/graph', name: '知识图谱', icon: Share },
+  { path: '/user/tasks', name: '检修任务', icon: Tickets },
   { path: '/user/ai-chat', name: 'AI 对话', icon: ChatDotRound },
 ]
 

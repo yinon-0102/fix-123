@@ -1,108 +1,119 @@
 <template>
-  <div class="profile-page">
-    <div class="page-header">
-      <h2>个人信息</h2>
-      <p class="subtitle">管理您的账户信息和设置</p>
-    </div>
-
-    <div class="profile-content" v-loading="loading">
-      <!-- 用户信息卡片 -->
-      <div class="profile-card">
-        <div class="profile-header">
-          <div class="avatar-wrapper">
-            <div class="avatar">{{ userInfo.name ? userInfo.name[0] : 'U' }}</div>
-            <div class="avatar-info">
-              <h3>{{ userInfo.name || '未设置' }}</h3>
-              <span class="user-type">{{ getTypeText(userInfo.type) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="profile-body">
-          <div class="info-grid">
-            <div class="info-item">
-              <label>姓名</label>
-              <span>{{ userInfo.name || '-' }}</span>
-            </div>
-            <div class="info-item">
-              <label>工号</label>
-              <span>{{ userInfo.number || '-' }}</span>
-            </div>
-            <div class="info-item">
-              <label>性别</label>
-              <span>{{ getGenderText(userInfo.gender) }}</span>
-            </div>
-            <div class="info-item">
-              <label>用户类型</label>
-              <span class="type-badge">{{ getTypeText(userInfo.type) }}</span>
-            </div>
-            <div class="info-item">
-              <label>状态</label>
-              <span class="status-badge" :class="getStatusClass(userInfo.status)">
-                {{ getStatusText(userInfo.status) }}
-              </span>
-            </div>
-            <div class="info-item">
-              <label>手机号</label>
-              <span>{{ userInfo.phone || '-' }}</span>
-            </div>
-            <div class="info-item">
-              <label>邮箱</label>
-              <span>{{ userInfo.email || '-' }}</span>
-            </div>
-            <div class="info-item">
-              <label>入职日期</label>
-              <span>{{ formatDate(userInfo.hireDate) }}</span>
-            </div>
-            <div class="info-item full-width">
-              <label>最后登录</label>
-              <span>{{ formatDate(userInfo.lastLoginTime) }}</span>
-            </div>
+  <section class="admin-profile-page" v-loading="loading">
+    <header class="profile-hero">
+      <div class="identity">
+        <div class="avatar">{{ userInitial }}</div>
+        <div class="identity-copy">
+          <h2>{{ userInfo.name || '未设置姓名' }}</h2>
+          <div class="identity-meta">
+            <span>{{ getTypeText(userInfo.type) }}</span>
+            <span class="dot" />
+            <span>{{ userInfo.number || '暂无工号' }}</span>
           </div>
         </div>
       </div>
+      <span class="status-badge" :class="getStatusClass(userInfo.status)">
+        {{ getStatusText(userInfo.status) }}
+      </span>
+    </header>
 
-      <!-- 编辑个人信息卡片 -->
-      <div class="edit-card">
-        <h4>编辑个人信息</h4>
-        <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
-          <el-form-item label="邮箱" prop="email">
-            <el-input v-model="form.email" placeholder="请输入邮箱" />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="handleUpdate" :loading="submitting">
+    <div class="profile-grid">
+      <section class="panel info-panel">
+        <div class="panel-head">
+          <h3>账号信息</h3>
+          <p>当前管理员账号的基础资料与联系方式</p>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-item">
+            <label>姓名</label>
+            <span>{{ userInfo.name || '-' }}</span>
+          </div>
+          <div class="info-item">
+            <label>工号</label>
+            <span>{{ userInfo.number || '-' }}</span>
+          </div>
+          <div class="info-item">
+            <label>性别</label>
+            <span>{{ getGenderText(userInfo.gender) }}</span>
+          </div>
+          <div class="info-item">
+            <label>用户类型</label>
+            <span>{{ getTypeText(userInfo.type) }}</span>
+          </div>
+          <div class="info-item">
+            <label>状态</label>
+            <span class="inline-status" :class="getStatusClass(userInfo.status)">
+              {{ getStatusText(userInfo.status) }}
+            </span>
+          </div>
+          <div class="info-item">
+            <label>手机号</label>
+            <span>{{ userInfo.phone || '-' }}</span>
+          </div>
+          <div class="info-item">
+            <label>邮箱</label>
+            <span>{{ userInfo.email || '-' }}</span>
+          </div>
+          <div class="info-item">
+            <label>入职日期</label>
+            <span>{{ formatDate(userInfo.hireDate, false) }}</span>
+          </div>
+          <div class="info-item wide">
+            <label>最后登录时间</label>
+            <span>{{ formatDate(userInfo.lastLoginTime) }}</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="side-stack">
+        <section class="panel edit-panel">
+          <div class="panel-head">
+            <h3>用户信息更改</h3>
+            <p>维护当前账号的手机号和邮箱信息</p>
+          </div>
+
+          <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
+            <el-form-item label="手机号" prop="phone">
+              <el-input v-model="form.phone" placeholder="请输入手机号" clearable />
+            </el-form-item>
+            <el-form-item label="邮箱" prop="email">
+              <el-input v-model="form.email" placeholder="请输入邮箱" clearable />
+            </el-form-item>
+            <el-button type="primary" :loading="submitting" @click="handleUpdate">
               保存修改
             </el-button>
-          </el-form-item>
-        </el-form>
-      </div>
+          </el-form>
+        </section>
 
-      <!-- 修改密码卡片 -->
-      <div class="password-card">
-        <h4>修改密码</h4>
-        <el-form :model="passwordForm" :rules="passwordRules" ref="passwordFormRef" label-width="100px">
-          <el-form-item label="当前密码" prop="oldPassword">
-            <el-input v-model="passwordForm.oldPassword" type="password" placeholder="请输入当前密码" show-password />
-          </el-form-item>
-          <el-form-item label="新密码" prop="newPassword">
-            <el-input v-model="passwordForm.newPassword" type="password" placeholder="请输入新密码" show-password />
-          </el-form-item>
-          <el-form-item label="确认密码" prop="confirmPassword">
-            <el-input v-model="passwordForm.confirmPassword" type="password" placeholder="请再次输入新密码" show-password />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="handlePasswordChange" :loading="passwordSubmitting">
+        <section class="panel password-panel">
+          <div class="panel-head">
+            <h3>修改密码</h3>
+            <p>更新当前管理员账号的登录密码</p>
+          </div>
+
+          <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-position="top">
+            <el-form-item label="当前密码" prop="oldPassword">
+              <el-input v-model="passwordForm.oldPassword" type="password" placeholder="请输入当前密码" show-password />
+            </el-form-item>
+            <el-form-item label="新密码" prop="newPassword">
+              <el-input v-model="passwordForm.newPassword" type="password" placeholder="请输入新密码" show-password />
+            </el-form-item>
+            <el-form-item label="确认密码" prop="confirmPassword">
+              <el-input v-model="passwordForm.confirmPassword" type="password" placeholder="请再次输入新密码" show-password />
+            </el-form-item>
+            <el-button type="primary" plain :loading="passwordSubmitting" @click="handlePasswordChange">
               修改密码
             </el-button>
-          </el-form-item>
-        </el-form>
+          </el-form>
+        </section>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getUserById, updateUser } from '@/api/user'
 
@@ -115,7 +126,8 @@ const passwordFormRef = ref(null)
 const userInfo = ref({})
 
 const form = reactive({
-  email: ''
+  phone: '',
+  email: '',
 })
 
 const passwordForm = reactive({
@@ -133,6 +145,13 @@ const validateConfirm = (rule, value, callback) => {
 }
 
 const rules = {
+  phone: [
+    {
+      pattern: /^1[3-9]\d{9}$/,
+      message: '请输入正确的手机号',
+      trigger: 'blur',
+    },
+  ],
   email: [
     { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
   ]
@@ -150,6 +169,21 @@ const passwordRules = {
     { required: true, message: '请再次输入新密码', trigger: 'blur' },
     { validator: validateConfirm, trigger: 'blur' }
   ]
+}
+
+const userInitial = computed(() => userInfo.value.name?.[0] || 'A')
+
+function getCurrentUser() {
+  try {
+    return JSON.parse(localStorage.getItem('userInfo') || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function syncLocalUser(nextUser) {
+  const current = getCurrentUser()
+  localStorage.setItem('userInfo', JSON.stringify({ ...current, ...nextUser }))
 }
 
 const getTypeText = (type) => {
@@ -171,63 +205,65 @@ const getStatusText = (status) => {
 const getStatusClass = (status) => {
   return Number(status) === 1 ? 'active' : 'inactive'
 }
-const formatDate = (date) => {
-  if (!date) return '-'
-  const d = new Date(date)
-  if (isNaN(d.getTime())) return '-'
-  return d.toLocaleString('zh-CN', {
+const formatDate = (value, withTime = true) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
+    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
   })
 }
 
 const fetchUserInfo = async () => {
+  const userData = getCurrentUser()
+  if (!userData.id) {
+    ElMessage.warning('未找到当前用户信息，请重新登录')
+    return
+  }
+
   loading.value = true
   try {
-    const userData = JSON.parse(localStorage.getItem('userInfo') || '{}')
-    if (userData.id) {
-      const res = await getUserById(userData.id)
-      if (res.code === '200' || res.code === 200) {
-        userInfo.value = res.data || {}
-        form.email = userInfo.value.email || ''
-        localStorage.setItem('userInfo', JSON.stringify({
-          ...userData,
-          ...userInfo.value,
-        }))
-      }
+    const res = await getUserById(userData.id)
+    if (res.code === '200' || res.code === 200) {
+      userInfo.value = res.data || {}
+      form.phone = userInfo.value.phone || ''
+      form.email = userInfo.value.email || ''
+      syncLocalUser(userInfo.value)
+    } else {
+      ElMessage.error(res.message || '获取个人信息失败')
     }
   } catch (error) {
-    console.error('获取用户信息失败:', error)
+    ElMessage.error('获取个人信息失败')
   } finally {
     loading.value = false
   }
 }
 
 const handleUpdate = async () => {
-  const valid = await formRef.value.validate().catch(() => false)
+  const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
   submitting.value = true
   try {
-    const userData = JSON.parse(localStorage.getItem('userInfo') || '{}')
+    const userData = getCurrentUser()
     const res = await updateUser({
       id: userData.id,
       name: userInfo.value.name,
       number: userInfo.value.number,
-      phone: userInfo.value.phone,
-      email: form.email?.trim() || null
+      phone: form.phone?.trim() || null,
+      email: form.email?.trim() || null,
     })
     if (res.code === '200' || res.code === 200) {
-      ElMessage.success('修改成功')
-      fetchUserInfo()
+      ElMessage.success('保存成功')
+      await fetchUserInfo()
     } else {
-      ElMessage.error(res.message || '修改失败')
+      ElMessage.error(res.message || '保存失败')
     }
   } catch (error) {
-    ElMessage.error('修改失败')
+    ElMessage.error('保存失败')
   } finally {
     submitting.value = false
   }
@@ -257,148 +293,195 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.profile-page {
-  max-width: 800px;
+.admin-profile-page {
+  max-width: 1080px;
   margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 32px;
-}
-
-.page-header h2 {
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--plaza-text);
-  margin-bottom: 8px;
-}
-
-.subtitle {
-  color: var(--plaza-text-muted);
-  font-size: 14px;
-}
-
-.profile-content {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
 }
 
-.profile-card,
-.edit-card,
-.password-card {
-  background: var(--plaza-bg-card);
-  border-radius: 12px;
+.profile-hero,
+.panel {
   border: 1px solid var(--plaza-border);
-  padding: 24px;
+  border-radius: 12px;
+  background: var(--plaza-bg-card);
+  box-shadow: var(--plaza-shadow-organic);
 }
 
-.profile-header {
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--plaza-border);
-  margin-bottom: 20px;
-}
-
-.avatar-wrapper {
+.profile-hero {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
+  padding: 22px;
+}
+
+.identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--plaza-accent), var(--plaza-accent-soft));
+  width: 62px;
+  height: 62px;
+  flex: 0 0 62px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
   color: #fff;
+  background: linear-gradient(135deg, var(--plaza-accent), var(--plaza-accent-hover));
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.identity-copy {
+  min-width: 0;
+}
+
+.identity-copy h2 {
+  color: var(--plaza-heading);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.identity-meta {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 600;
-}
-
-.avatar-info h3 {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--plaza-text);
-  margin-bottom: 6px;
-}
-
-.user-type {
-  display: inline-block;
-  padding: 4px 12px;
-  background: var(--plaza-accent-soft);
-  color: var(--plaza-accent);
-  border-radius: 20px;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--plaza-text-muted);
   font-size: 13px;
-  font-weight: 500;
+}
+
+.dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--plaza-border-strong);
+}
+
+.status-badge,
+.inline-status {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.status-badge {
+  padding: 7px 12px;
+}
+
+.inline-status {
+  padding: 4px 9px;
+}
+
+.active {
+  color: var(--plaza-success);
+  background: var(--plaza-success-soft);
+}
+
+.inactive {
+  color: var(--plaza-danger);
+  background: var(--plaza-danger-soft);
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+
+.side-stack {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.panel {
+  padding: 20px;
+}
+
+.panel-head {
+  margin-bottom: 18px;
+}
+
+.panel-head h3 {
+  color: var(--plaza-heading);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.panel-head p {
+  margin-top: 4px;
+  color: var(--plaza-text-muted);
+  font-size: 13px;
 }
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--plaza-border);
+  border-radius: 10px;
+  background: var(--plaza-bg-input);
+}
+
+.info-item.wide {
+  grid-column: 1 / -1;
 }
 
 .info-item label {
-  font-size: 13px;
+  display: block;
+  margin-bottom: 6px;
   color: var(--plaza-text-muted);
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .info-item span {
-  font-size: 15px;
   color: var(--plaza-text);
-}
-
-.type-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  background: var(--plaza-accent-soft);
-  color: var(--plaza-accent);
-  border-radius: 6px;
-  font-size: 13px;
-  width: fit-content;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  width: fit-content;
-}
-
-.status-badge.active {
-  background: #f0fdf4;
-  color: #52c41a;
-}
-
-.status-badge.inactive {
-  background: #fff2f0;
-  color: #ff4d4f;
-}
-
-.edit-card h4,
-.password-card h4 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--plaza-text);
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--plaza-border);
+  overflow-wrap: anywhere;
 }
 
-@media (max-width: 600px) {
+.edit-panel :deep(.el-form-item__label),
+.password-panel :deep(.el-form-item__label) {
+  color: var(--plaza-text);
+  font-weight: 700;
+}
+
+.edit-panel :deep(.el-button),
+.password-panel :deep(.el-button) {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .profile-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .info-grid {
     grid-template-columns: 1fr;
   }

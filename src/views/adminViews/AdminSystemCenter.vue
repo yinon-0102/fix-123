@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AdminNotify from './AdminNotify.vue'
-import AdminProfile from './AdminProfile.vue'
 import AdminUsers from './AdminUsers.vue'
 
 const route = useRoute()
@@ -20,12 +19,6 @@ const tabs = [
     label: '通知中心',
     desc: '查看任务生成、知识导入与系统消息',
     component: AdminNotify,
-  },
-  {
-    name: 'profile',
-    label: '个人资料',
-    desc: '查看和维护当前管理员账号信息',
-    component: AdminProfile,
   },
 ]
 

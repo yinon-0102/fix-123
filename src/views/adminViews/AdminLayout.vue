@@ -10,6 +10,7 @@ import {
   ChatDotRound,
   List,
   Collection,
+  User,
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -46,6 +47,7 @@ const menuItems = [
   { path: '/admin/tasks', name: '任务管理', icon: List },
   { path: '/admin/knowledge-center', name: '知识中心', icon: Collection },
   { path: '/admin/ai-chat', name: 'AI 助手', icon: ChatDotRound },
+  { path: '/admin/profile', name: '个人中心', icon: User },
   { path: '/admin/system', name: '系统管理', icon: Setting },
 ]
 

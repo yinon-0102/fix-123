@@ -80,7 +80,7 @@ const routes = [
       {
         path: 'profile',
         name: 'AdminProfile',
-        redirect: { path: '/admin/system', query: { tab: 'profile' } }
+        component: () => import('../views/adminViews/AdminProfile.vue')
       },
       {
         path: 'notify',

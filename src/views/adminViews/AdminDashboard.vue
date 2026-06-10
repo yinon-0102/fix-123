@@ -50,7 +50,7 @@ const quickActions = [
   },
   {
     title: '系统管理',
-    desc: '维护用户、通知、个人资料和平台配置',
+    desc: '维护用户、通知和平台配置',
     path: '/admin/system',
     icon: Setting,
     tone: 'slate',
